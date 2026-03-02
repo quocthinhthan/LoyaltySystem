@@ -1,6 +1,13 @@
-using LoyaltySystem.Application;
+using LoyaltySystem.Application.Features.Auth.Commands;
+using LoyaltySystem.Domain.Interfaces;
+using LoyaltySystem.Infrastructure;
+using LoyaltySystem.Infrastructure.Repositories;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // Add services to the container.
 
@@ -9,6 +16,12 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddApplicationServices();
+
+// Đăng ký UnitOfWork với vòng đời Scoped (tồn tại trong 1 Request)
+builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+
+//Đăng ký MediatR (Để nó tìm thấy RegisterHandler)
+builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(RegisterCommand).Assembly));
 
 var app = builder.Build();
 

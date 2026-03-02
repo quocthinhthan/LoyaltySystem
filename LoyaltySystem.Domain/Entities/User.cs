@@ -21,5 +21,6 @@ namespace LoyaltySystem.Domain.Entities
 
         // Quan hệ với các đơn hàng
         public virtual ICollection<Order>? Orders { get; set; }
+        public virtual Account? Account { get; set; }
     }
 }
