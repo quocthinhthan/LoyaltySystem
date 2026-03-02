@@ -32,6 +32,17 @@ namespace LoyaltySystem.Infrastructure
 
             // Cấu hình bảng MonthlyPoints: Khai báo Composite Key (Khóa chính kết hợp)
             // Đây là phần quan trọng nhất để làm Ranking Dashboard theo tháng
+
+            modelBuilder.Entity<User>(entity => 
+            {
+                entity.HasKey(u => u.UserId);
+
+                // HasOne trỏ vào 'Account' (đối tượng), không trỏ vào 'PhoneNumber' (chuỗi)
+                entity.HasOne(u => u.Account)
+                      .WithOne(a => a.User) // WithOne trỏ ngược lại 'User' bên bảng Account
+                      .HasForeignKey<Account>(a => a.PhoneNumber) // Khóa ngoại đặt tại Account.PhoneNumber
+                      .HasPrincipalKey<User>(u => u.PhoneNumber); // Nối sang User.PhoneNumber
+            });
             modelBuilder.Entity<MonthlyPoints>()
                 .HasKey(mp => new { mp.CustomerId, mp.Month, mp.Year });
 

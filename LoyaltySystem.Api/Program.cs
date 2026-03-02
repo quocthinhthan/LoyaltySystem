@@ -1,5 +1,8 @@
-using Microsoft.EntityFrameworkCore;
+using LoyaltySystem.Application.Features.Auth.Commands;
+using LoyaltySystem.Domain.Interfaces;
 using LoyaltySystem.Infrastructure;
+using LoyaltySystem.Infrastructure.Repositories;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,6 +15,12 @@ builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// Đăng ký UnitOfWork với vòng đời Scoped (tồn tại trong 1 Request)
+builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+
+//Đăng ký MediatR (Để nó tìm thấy RegisterHandler)
+builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(RegisterCommand).Assembly));
 
 var app = builder.Build();
 
