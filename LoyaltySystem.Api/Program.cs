@@ -7,7 +7,7 @@ using LoyaltySystem.Infrastructure.Repositories;
 using LoyaltySystem.Infrastructure.Services; 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
-using LoyaltySystem.Api.Middlewares; // Thêm dòng này
+using LoyaltySystem.Api.Middlewares;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,9 +16,6 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // 2. Đăng ký các Interface của hệ thống 
-// Đăng ký IAppDbContext trỏ về ApplicationDbContext
-builder.Services.AddScoped<IAppDbContext>(provider => provider.GetRequiredService<ApplicationDbContext>());
-
 // Đăng ký UnitOfWork
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 

@@ -1,25 +1,25 @@
 using LoyaltySystem.Application.Common.Interfaces;
+using LoyaltySystem.Domain.Interfaces;
 using MediatR;
-using System.Linq; // Sử dụng LINQ thuần của C#
 
 namespace LoyaltySystem.Application.Features.Auth.Commands.Login;
 
 public class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResult>
 {
-    private readonly IAppDbContext _context;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly IJwtTokenGenerator _jwtTokenGenerator;
 
-    public LoginCommandHandler(IAppDbContext context, IJwtTokenGenerator jwtTokenGenerator)
+    public LoginCommandHandler(IUnitOfWork unitOfWork, IJwtTokenGenerator jwtTokenGenerator)
     {
-        _context = context;
+        _unitOfWork = unitOfWork;
         _jwtTokenGenerator = jwtTokenGenerator;
     }
 
-    public Task<AuthResult> Handle(LoginCommand request, CancellationToken cancellationToken)
+    public async Task<AuthResult> Handle(LoginCommand request, CancellationToken cancellationToken)
     {
-        // 1. Tìm Account qua IQueryable (Dùng hàm đồng bộ FirstOrDefault)
-        var account = _context.Accounts
-            .FirstOrDefault(x => x.PhoneNumber == request.PhoneNumber);
+        // 1. Tìm Account theo PhoneNumber
+        var account = await _unitOfWork.Account
+            .FirstOrDefaultAsync(x => x.PhoneNumber == request.PhoneNumber);
 
         if (account == null || account.Password != request.Password)
         {
@@ -27,8 +27,8 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResult>
         }
 
         // 2. Lấy thông tin User
-        var user = _context.Users
-            .FirstOrDefault(x => x.PhoneNumber == request.PhoneNumber);
+        var user = await _unitOfWork.Users
+            .FirstOrDefaultAsync(x => x.PhoneNumber == request.PhoneNumber);
 
         if (user == null)
         {
@@ -38,7 +38,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResult>
         // 3. Sinh Token
         var token = _jwtTokenGenerator.GenerateToken(user);
 
-        // 4. Trả kết quả (Bọc trong Task.FromResult vì hàm interface bắt buộc trả về Task)
+        // 4. Trả kết quả
         var result = new AuthResult(
             Token: token,
             UserId: user.UserId,
@@ -46,6 +46,6 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResult>
             Role: user.Role
         );
 
-        return Task.FromResult(result);
+        return result;
     }
 }
