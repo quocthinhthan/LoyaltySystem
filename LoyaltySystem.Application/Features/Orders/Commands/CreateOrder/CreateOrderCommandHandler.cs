@@ -15,23 +15,29 @@ public class CreateOrderCommandHandler : IRequestHandler<CreateOrderCommand, Cre
 
     public async Task<CreateOrderResult> Handle(CreateOrderCommand request, CancellationToken cancellationToken)
     {
-        // 1. Kiểm tra khách hàng có tồn tại không
-        var customer = (await _unitOfWork.Users.GetAllAsync())
-            .FirstOrDefault(u => u.PhoneNumber == request.CustomerPhoneNumber && u.Role == "Customer");
+        // 1. Parse và validate StaffId từ JWT (string → int)
+        if (!int.TryParse(request.StaffId, out int staffId))
+        {
+            throw new Exception("StaffId không hợp lệ");
+        }
+
+        // 2. Kiểm tra khách hàng có tồn tại không
+        var customer = await _unitOfWork.Users
+            .FirstOrDefaultAsync(u => u.PhoneNumber == request.CustomerPhoneNumber && u.Role == "Customer");
 
         if (customer == null)
         {
             throw new Exception($"Không tìm thấy khách hàng với số điện thoại {request.CustomerPhoneNumber}");
         }
 
-        // 2. Tính điểm tích lũy (1000đ = 1 điểm)
+        // 3. Tính điểm tích lũy (1000đ = 1 điểm)
         int pointsEarned = (int)(request.Price / 1000);
 
-        // 3. Tạo Order mới
+        // 4. Tạo Order mới
         var order = new Order
         {
             CustomerId = customer.UserId,
-            StaffId = request.StaffId,
+            StaffId = staffId, // Dùng staffId đã parse
             Price = request.Price,
             TimeCreate = DateTime.Now
         };
@@ -46,8 +52,8 @@ public class CreateOrderCommandHandler : IRequestHandler<CreateOrderCommand, Cre
         var currentMonth = DateTime.Now.Month;
         var currentYear = DateTime.Now.Year;
 
-        var monthlyPoint = (await _unitOfWork.MonthlyPoints.GetAllAsync())
-            .FirstOrDefault(mp => mp.CustomerId == customer.UserId 
+        var monthlyPoint = await _unitOfWork.MonthlyPoints
+            .FirstOrDefaultAsync(mp => mp.CustomerId == customer.UserId 
                                && mp.Month == currentMonth 
                                && mp.Year == currentYear);
 
@@ -65,9 +71,9 @@ public class CreateOrderCommandHandler : IRequestHandler<CreateOrderCommand, Cre
         }
         else
         {
-            // Cộng dồn nếu đã có
+            // Cộng dồn nếu đã có - Dùng Update thay vì Add
             monthlyPoint.MonthlyTotal += pointsEarned;
-            _unitOfWork.MonthlyPoints.Add(monthlyPoint);
+            _unitOfWork.MonthlyPoints.Update(monthlyPoint);
         }
 
         // 6. Lưu tất cả thay đổi

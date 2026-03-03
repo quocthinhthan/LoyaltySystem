@@ -1,6 +1,8 @@
 ﻿using LoyaltySystem.Application.Features.Orders.Commands.CreateOrder;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace LoyaltySystem.Api.Controllers;
 
@@ -19,12 +21,18 @@ public class OrdersController : ControllerBase
     /// Tạo đơn hàng và tích điểm cho khách hàng
     /// </summary>
     [HttpPost]
+    [Authorize]
     public async Task<IActionResult> CreateOrder([FromBody] CreateOrderRequest request)
     {
+        var staffId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(staffId))
+        {
+            return Unauthorized(new { message = "Không tìm thấy thông tin Staff" });
+        }
         var command = new CreateOrderCommand(
             CustomerPhoneNumber: request.CustomerPhoneNumber,
             Price: request.Price,
-            StaffId: 1 // Tạm hardcode, sau sẽ lấy từ JWT
+            StaffId: staffId
         );
 
         var result = await _mediator.Send(command);

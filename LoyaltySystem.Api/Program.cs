@@ -62,7 +62,7 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-// 6. AUTHORIZATION POLICIES 
+// 6. AUTHORIZATION POLICIESs
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
@@ -71,7 +71,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("StaffOrAdmin", policy => policy.RequireRole("Staff", "Admin"));
 });
 
-// 6. Cấu hình Swagger với nút Authorize
+// 7. Cấu hình Swagger với nút Authorize
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "Loyalty System API", Version = "v1" });
@@ -111,8 +111,9 @@ app.UseHttpsRedirection();
 
 // Lưu ý: Cần thêm UseAuthentication trước UseAuthorization để nhận diện Token
 app.UseAuthentication();
+app.UseMiddleware<OrderAuthorizationMiddleware>();
 app.UseAuthorization();
-
+    
 app.MapControllers();
 
 app.Run();

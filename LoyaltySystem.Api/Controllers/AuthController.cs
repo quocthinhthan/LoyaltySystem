@@ -1,6 +1,7 @@
 ﻿using LoyaltySystem.Application.Features.Auth.Commands;
 using LoyaltySystem.Application.Features.Auth.Commands.Login;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 [ApiController]
@@ -10,6 +11,7 @@ public class AuthController : ControllerBase
     private readonly IMediator _mediator;
     public AuthController(IMediator mediator) => _mediator = mediator;
 
+    [AllowAnonymous]
     [HttpPost("login")]
     public async Task<ActionResult<AuthResult>> Login(LoginCommand command)
     {
@@ -17,6 +19,7 @@ public class AuthController : ControllerBase
     }
 
 
+    [AllowAnonymous]
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterCommand command)
     {
