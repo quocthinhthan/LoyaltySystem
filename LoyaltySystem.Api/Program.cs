@@ -8,8 +8,12 @@ using LoyaltySystem.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using LoyaltySystem.Api.Middlewares;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+
 
 // 1. Cấu hình Database
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -33,7 +37,41 @@ builder.Services.AddApplicationServices();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
-// 5. Cấu hình Swagger với nút Authorize
+
+
+// 5. Cấu hình JWT
+var jwtSettings = builder.Configuration.GetSection("JwtSettings");
+var secretKey = jwtSettings["SecretKey"] ?? "Key_Bi_Mat_Toi_Thieu_32_Ky_Tu_Nhe_Thinh";
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = jwtSettings["Issuer"] ?? "LoyaltySystem",
+        ValidAudience = jwtSettings["Audience"] ?? "LoyaltySystem",
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
+    };
+});
+
+// 6. AUTHORIZATION POLICIES 
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
+    options.AddPolicy("StaffOnly", policy => policy.RequireRole("Staff"));
+    options.AddPolicy("CustomerOnly", policy => policy.RequireRole("Customer"));
+    options.AddPolicy("StaffOrAdmin", policy => policy.RequireRole("Staff", "Admin"));
+});
+
+// 6. Cấu hình Swagger với nút Authorize
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "Loyalty System API", Version = "v1" });
