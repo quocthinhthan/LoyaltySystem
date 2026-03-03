@@ -62,6 +62,36 @@ public class OrderAuthorizationMiddleware
             _logger.LogInformation(
                 "Order creation authorized for User {UserId} ({UserName}) with role '{Role}'",
                 userId, userName, role);
+        } else if (method == "GET" && (path?.Contains("/api/order") == true))
+        {
+            // Kiểm tra quyền truy cập cho GET /api/orders
+            if (!context.User.Identity?.IsAuthenticated ?? true)
+            {
+                _logger.LogWarning(
+                    "Unauthorized access attempt to view orders from IP: {IP}",
+                    context.Connection.RemoteIpAddress);
+                context.Response.StatusCode = 401;
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    error = "Unauthorized",
+                    message = "Bạn cần đăng nhập để xem đơn hàng."
+                });
+                return;
+            }
+            var role = context.User.FindFirst(ClaimTypes.Role)?.Value;
+            if (role != "Staff" && role != "Admin" && role != "Customer")
+            {
+                _logger.LogWarning(
+                    "Forbidden: User with role '{Role}' attempted to view orders",
+                    role);
+                context.Response.StatusCode = 403;
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    error = "Forbidden",
+                    message = $"Bạn không có quyền xem đơn hàng. Role hiện tại của bạn: {role}"
+                });
+                return;
+            }
         }
 
         // Tiếp tục xử lý request

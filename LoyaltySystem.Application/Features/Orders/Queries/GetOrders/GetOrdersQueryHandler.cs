@@ -18,11 +18,16 @@ public class GetOrdersQueryHandler : IRequestHandler<GetOrdersQuery, GetOrdersRe
         var users = await _unitOfWork.Users.GetAllAsync();
         var userDict = users.ToDictionary(u => u.UserId);
 
+        if (request.UserQueryId != request.UserId.ToString() && request.Role == "Customer")
+        {
+            throw new UnauthorizedAccessException("Người dùng không thể xem các đơn hàng của người dùng khác!");
+        }
+
         // 2. Lấy tất cả orders
         var orders = (await _unitOfWork.Orders.GetAllAsync()).AsQueryable();
 
-        // 3. Phân quyền: Customer chỉ xem orders của mình
-        if (request.Role == "Customer")
+        // 3. Lọc theo userId
+        if (request.UserId > 0)
         {
             orders = orders.Where(o => o.CustomerId == request.UserId);
         }
@@ -32,6 +37,8 @@ public class GetOrdersQueryHandler : IRequestHandler<GetOrdersQuery, GetOrdersRe
         {
             orders = orders.Where(o => o.TimeCreate >= request.StartDate.Value);
         }
+
+
 
         if (request.EndDate.HasValue)
         {

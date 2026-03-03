@@ -1,7 +1,6 @@
 ﻿using LoyaltySystem.Application.Features.Orders.Commands.CreateOrder;
 using LoyaltySystem.Application.Features.Orders.Queries.GetOrders;
 using LoyaltySystem.Application.Features.Orders.Queries.GetOrderById;
-using LoyaltySystem.Application.Features.Orders.Queries.GetOrdersByCustomer;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -55,9 +54,9 @@ public class OrdersController : ControllerBase
     /// <param name="sortBy">Sắp xếp theo: TimeCreate, Price</param>
     /// <param name="isDescending">Giảm dần (true) hay tăng dần (false)</param>
     [HttpGet]
+    [Authorize]
     public async Task<IActionResult> GetOrders(
         [FromQuery] int userId,
-        [FromQuery] string role = "Customer",
         [FromQuery] DateTime? startDate = null,
         [FromQuery] DateTime? endDate = null,
         [FromQuery] int pageNumber = 1,
@@ -68,7 +67,8 @@ public class OrdersController : ControllerBase
     {
         var query = new GetOrdersQuery(
             UserId: userId,
-            Role: role,
+            UserQueryId: User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "",
+            Role: User.FindFirst(ClaimTypes.Role)?.Value ?? "",
             StartDate: startDate,
             EndDate: endDate,
             PageNumber: pageNumber,
@@ -86,6 +86,7 @@ public class OrdersController : ControllerBase
     /// Xem chi tiết 1 order
     /// </summary>
     [HttpGet("{orderId}")]
+    [Authorize]
     public async Task<IActionResult> GetOrderById(
         int orderId,
         [FromQuery] int userId,
@@ -95,36 +96,11 @@ public class OrdersController : ControllerBase
         var result = await _mediator.Send(query);
         return Ok(result);
     }
-
-    /// <summary>
-    /// Staff xem tất cả orders của 1 customer với filter
-    /// </summary>
-    [HttpGet("customer/{customerId}")]
-    public async Task<IActionResult> GetOrdersByCustomer(
-        int customerId,
-        [FromQuery] string role = "Staff",
-        [FromQuery] DateTime? startDate = null,
-        [FromQuery] DateTime? endDate = null,
-        [FromQuery] int pageNumber = 1,
-        [FromQuery] int pageSize = 20)
-    {
-        var query = new GetOrdersByCustomerQuery(
-            CustomerId: customerId,
-            CallerRole: role,
-            StartDate: startDate,
-            EndDate: endDate,
-            PageNumber: pageNumber,
-            PageSize: pageSize
-        );
-
-        var result = await _mediator.Send(query);
-        return Ok(result);
-    }
 }
 
-// DTO Request
+// DTO Request - Client chỉ cần gửi CustomerPhoneNumber và Price
+// StaffId được tự động lấy từ JWT token
 public record CreateOrderRequest(
     string CustomerPhoneNumber,
-    decimal Price,
-    int StaffId
+    decimal Price
 );

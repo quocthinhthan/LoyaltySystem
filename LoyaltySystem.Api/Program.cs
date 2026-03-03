@@ -1,3 +1,4 @@
+using LoyaltySystem.Api.Middlewares;
 using LoyaltySystem.Application;
 using LoyaltySystem.Application.Common.Interfaces;
 using LoyaltySystem.Application.Features.Auth.Commands;
@@ -5,11 +6,11 @@ using LoyaltySystem.Domain.Interfaces;
 using LoyaltySystem.Infrastructure;
 using LoyaltySystem.Infrastructure.Repositories;
 using LoyaltySystem.Infrastructure.Services; 
-using Microsoft.EntityFrameworkCore;
-using Microsoft.OpenApi.Models;
-using LoyaltySystem.Api.Middlewares;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
+using System.Reflection.PortableExecutable;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -108,10 +109,11 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
-// Lưu ý: Cần thêm UseAuthentication trước UseAuthorization để nhận diện Token
 app.UseAuthentication();
-app.UseMiddleware<OrderAuthorizationMiddleware>();
+app.UseWhen(context => context.Request.Path.StartsWithSegments("/api/Orders"), appBuilder =>
+{
+    appBuilder.UseMiddleware<OrderAuthorizationMiddleware>();
+});
 app.UseAuthorization();
     
 app.MapControllers();

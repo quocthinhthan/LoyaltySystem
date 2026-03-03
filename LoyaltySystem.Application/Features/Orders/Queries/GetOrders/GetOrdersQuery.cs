@@ -4,7 +4,8 @@ namespace LoyaltySystem.Application.Features.Orders.Queries.GetOrders;
 
 public record GetOrdersQuery(
     int UserId,                 // Người gọi API
-    string Role,                // Role để phân quyền
+    string UserQueryId,
+    string Role,                // Role: Customer/Staff/Admin
     DateTime? StartDate,        // ✅ Filter từ ngày (nullable)
     DateTime? EndDate,          // ✅ Filter đến ngày (nullable)
     int PageNumber = 1,         // ✅ Số trang (mặc định 1)
