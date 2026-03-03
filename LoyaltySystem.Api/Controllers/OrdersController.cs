@@ -1,7 +1,6 @@
 ﻿using LoyaltySystem.Application.Features.Orders.Commands.CreateOrder;
 using LoyaltySystem.Application.Features.Orders.Queries.GetOrders;
 using LoyaltySystem.Application.Features.Orders.Queries.GetOrderById;
-using LoyaltySystem.Application.Features.Orders.Queries.GetOrdersByCustomer;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
@@ -88,30 +87,6 @@ public class OrdersController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Staff xem tất cả orders của 1 customer với filter
-    /// </summary>
-    [HttpGet("customer/{customerId}")]
-    public async Task<IActionResult> GetOrdersByCustomer(
-        int customerId,
-        [FromQuery] string role = "Staff",
-        [FromQuery] DateTime? startDate = null,
-        [FromQuery] DateTime? endDate = null,
-        [FromQuery] int pageNumber = 1,
-        [FromQuery] int pageSize = 20)
-    {
-        var query = new GetOrdersByCustomerQuery(
-            CustomerId: customerId,
-            CallerRole: role,
-            StartDate: startDate,
-            EndDate: endDate,
-            PageNumber: pageNumber,
-            PageSize: pageSize
-        );
-
-        var result = await _mediator.Send(query);
-        return Ok(result);
-    }
 }
 
 // DTO Request
