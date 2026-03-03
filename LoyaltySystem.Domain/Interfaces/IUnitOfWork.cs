@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace LoyaltySystem.Domain.Interfaces
 {
-    public interface IUnitOfWork : IDisposable
+    public interface IUnitOfWork : IDisposable 
     {
         // Khai báo các Repository cho từng bảng
         IGenericRepository<Entities.User> Users { get; }
