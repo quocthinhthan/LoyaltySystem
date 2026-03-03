@@ -1,26 +1,27 @@
-﻿using MediatR;
+﻿using LoyaltySystem.Application.Features.Auth.Commands;
+using LoyaltySystem.Application.Features.Auth.Commands.Login;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
-using LoyaltySystem.Application.Features.Auth.Commands;
 
-
-namespace LoyaltySystem.Api.Controllers
+[ApiController]
+[Route("api/[controller]")]
+public class AuthController : ControllerBase
 {
-    [ApiController]
-    [Route("api/[controller]")]
-    public class AuthController : ControllerBase
+    private readonly IMediator _mediator;
+    public AuthController(IMediator mediator) => _mediator = mediator;
+
+    [HttpPost("login")]
+    public async Task<ActionResult<AuthResult>> Login(LoginCommand command)
     {
-        private readonly IMediator _mediator;
-
-        public AuthController(IMediator mediator)
-        {
-            _mediator = mediator;
-        }
-
-        [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] RegisterCommand command)
-        {
-            var userId = await _mediator.Send(command);
-            return Ok(new { Message = "Đăng ký thành công", UserId = userId });
-        }
+        return await _mediator.Send(command); // Sẽ gọi đến LoginCommandHandler
     }
+
+
+    [HttpPost("register")]
+    public async Task<IActionResult> Register([FromBody] RegisterCommand command)
+    {
+        var userId = await _mediator.Send(command);
+        return Ok(new { Message = "Đăng ký thành công", UserId = userId });
+    }
+
 }

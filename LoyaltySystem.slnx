@@ -1,6 +1,6 @@
 <Solution>
   <Project Path="LoyaltySystem.Api/LoyaltySystem.Api.csproj" />
-  <Project Path="LoyaltySystem.Application/LoyaltySystem.Application.csproj" />
+  <Project Path="LoyaltySystem.Application/LoyaltySystem.Application.csproj" Id="ec734d87-e661-4343-80fc-2bd7ce896cd8" />
   <Project Path="LoyaltySystem.Domain/LoyaltySystem.Domain.csproj" />
   <Project Path="LoyaltySystem.Infrastructure/LoyaltySystem.Infrastructure.csproj" />
 </Solution>
