@@ -1,3 +1,4 @@
+using LoyaltySystem.Application.Common.Interfaces;
 using LoyaltySystem.Domain.Entities;
 using LoyaltySystem.Domain.Interfaces;
 using MediatR;
@@ -7,19 +8,24 @@ namespace LoyaltySystem.Application.Features.Orders.Commands.CreateOrder;
 public class CreateOrderCommandHandler : IRequestHandler<CreateOrderCommand, CreateOrderResult>
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ICurrentUserService _currentUserService;
 
-    public CreateOrderCommandHandler(IUnitOfWork unitOfWork)
+    public CreateOrderCommandHandler(IUnitOfWork unitOfWork, ICurrentUserService currentUserService)
     {
         _unitOfWork = unitOfWork;
+        _currentUserService = currentUserService;
     }
 
     public async Task<CreateOrderResult> Handle(CreateOrderCommand request, CancellationToken cancellationToken)
     {
-        // 1. Parse và validate StaffId từ JWT (string → int)
-        if (!int.TryParse(request.StaffId, out int staffId))
+        var staffIdStr = _currentUserService.UserId;
+
+        if (string.IsNullOrEmpty(staffIdStr))
         {
-            throw new Exception("StaffId không hợp lệ");
+            throw new UnauthorizedAccessException("Không xác định được nhân viên thực hiện đơn hàng.");
         }
+
+        int staffId = int.Parse(staffIdStr);
 
         // 2. Kiểm tra khách hàng có tồn tại không
         var customer = await _unitOfWork.Users
@@ -71,7 +77,7 @@ public class CreateOrderCommandHandler : IRequestHandler<CreateOrderCommand, Cre
         }
         else
         {
-            // Cộng dồn nếu đã có - Dùng Update thay vì Add
+            // Cộng dồn nếu đã có
             monthlyPoint.MonthlyTotal += pointsEarned;
             _unitOfWork.MonthlyPoints.Update(monthlyPoint);
         }

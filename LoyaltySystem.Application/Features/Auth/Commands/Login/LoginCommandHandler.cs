@@ -24,7 +24,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResult>
 
         if (account == null)
         {
-            throw new Exception("Số điện thoại hoặc mật khẩu không chính xác."); 
+            throw new Exception("Số điện thoại hoặc mật khẩu không chính xác.");
         }
 
         bool isPasswordValid = BCrypt.Net.BCrypt.Verify(request.Password, account.Password);

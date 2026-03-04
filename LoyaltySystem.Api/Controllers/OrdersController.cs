@@ -23,22 +23,16 @@ public class OrdersController : ControllerBase
     /// Tạo đơn hàng mới
     /// </summary>
     [HttpPost]
-    [Authorize]
-    public async Task<IActionResult> CreateOrder([FromBody] CreateOrderRequest request)
+    [Authorize(Policy = "StaffOrAdmin")] // Dùng Policy thay vì check thủ công
+    public async Task<IActionResult> CreateOrder([FromBody] CreateOrderCommand request)
     {
-        var staffId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (string.IsNullOrEmpty(staffId))
-        {
-            return Unauthorized(new { message = "Không tìm thấy thông tin Staff" });
-        }
+        // Không cần lấy staffId ở đây nữa, Handler sẽ tự lấy qua ICurrentUserService
         var command = new CreateOrderCommand(
             CustomerPhoneNumber: request.CustomerPhoneNumber,
-            Price: request.Price,
-            StaffId: staffId
+            Price: request.Price
         );
 
-        var result = await _mediator.Send(command);
-        return Ok(result);
+        return Ok(await _mediator.Send(command));
     }
 
     /// <summary>
@@ -55,31 +49,10 @@ public class OrdersController : ControllerBase
     /// <param name="isDescending">Giảm dần (true) hay tăng dần (false)</param>
     [HttpGet]
     [Authorize]
-    public async Task<IActionResult> GetOrders(
-        [FromQuery] int userId,
-        [FromQuery] DateTime? startDate = null,
-        [FromQuery] DateTime? endDate = null,
-        [FromQuery] int pageNumber = 1,
-        [FromQuery] int pageSize = 10,
-        [FromQuery] string? customerPhone = null,
-        [FromQuery] string sortBy = "TimeCreate",
-        [FromQuery] bool isDescending = true)
+    public async Task<IActionResult> GetOrders([FromQuery] GetOrdersQuery query)
     {
-        var query = new GetOrdersQuery(
-            UserId: userId,
-            UserQueryId: User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "",
-            Role: User.FindFirst(ClaimTypes.Role)?.Value ?? "",
-            StartDate: startDate,
-            EndDate: endDate,
-            PageNumber: pageNumber,
-            PageSize: pageSize,
-            CustomerPhone: customerPhone,
-            SortBy: sortBy,
-            IsDescending: isDescending
-        );
-
-        var result = await _mediator.Send(query);
-        return Ok(result);
+        // Chỉ cần gửi query, các thông tin UserId, Role bên trong Query Record nên được xóa bỏ
+        return Ok(await _mediator.Send(query));
     }
 
     /// <summary>
@@ -89,17 +62,6 @@ public class OrdersController : ControllerBase
     [Authorize]
     public async Task<IActionResult> GetOrderById(int orderId)
     {
-        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
-        var userRole = User.FindFirst(ClaimTypes.Role)?.Value ?? "";
-        var query = new GetOrderByIdQuery(orderId, userId, userRole);
-        var result = await _mediator.Send(query);
-        return Ok(result);
+        return Ok(await _mediator.Send(new GetOrderByIdQuery(orderId)));
     }
 }
-
-// DTO Request - Client chỉ cần gửi CustomerPhoneNumber và Price
-// StaffId được tự động lấy từ JWT token
-public record CreateOrderRequest(
-    string CustomerPhoneNumber,
-    decimal Price
-);

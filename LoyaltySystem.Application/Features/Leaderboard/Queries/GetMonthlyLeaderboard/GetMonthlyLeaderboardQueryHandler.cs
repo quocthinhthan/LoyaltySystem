@@ -1,5 +1,9 @@
 using LoyaltySystem.Domain.Interfaces;
 using MediatR;
+using System;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace LoyaltySystem.Application.Features.Leaderboard.Queries.GetMonthlyLeaderboard;
 
@@ -15,66 +19,45 @@ public class GetMonthlyLeaderboardQueryHandler : IRequestHandler<GetMonthlyLeade
     public async Task<MonthlyLeaderboardResult> Handle(GetMonthlyLeaderboardQuery request, CancellationToken cancellationToken)
     {
         var now = DateTime.Now;
-
-        // 1. Xử lý default values
         int endMonth = request.EndMonth ?? now.Month;
         int endYear = request.EndYear ?? now.Year;
         int startMonth = request.StartMonth ?? endMonth;
         int startYear = request.StartYear ?? endYear;
 
-        // 2. Validate
-        if (startMonth < 1 || startMonth > 12 || endMonth < 1 || endMonth > 12)
-        {
-            throw new ArgumentException("Tháng phải từ 1 đến 12");
-        }
+        // 1. Chỉ định nghĩa Query, chưa tải dữ liệu về RAM
+        // Sử dụng IQueryable để SQL Server xử lý lọc và tính toán
+        var query = _unitOfWork.MonthlyPoints.Query()
+            .Where(mp => (mp.Year > startYear || (mp.Year == startYear && mp.Month >= startMonth)) &&
+                         (mp.Year < endYear || (mp.Year == endYear && mp.Month <= endMonth)));
 
-        if (startYear < 2000 || startYear > 2100 || endYear < 2000 || endYear > 2100)
-        {
-            throw new ArgumentException("Năm không hợp lệ");
-        }
-
-        // 3. Validate start <= end
-        var startDate = new DateTime(startYear, startMonth, 1);
-        var endDate = new DateTime(endYear, endMonth, 1);
-        
-        if (startDate > endDate)
-        {
-            throw new ArgumentException("Tháng/năm bắt đầu phải <= tháng/năm kết thúc");
-        }
-
-        // 4. Lấy tất cả MonthlyPoints trong khoảng thời gian
-        var allMonthlyPoints = (await _unitOfWork.MonthlyPoints.GetAllAsync())
-            .Where(mp => IsInRange(mp.Month, mp.Year, startMonth, startYear, endMonth, endYear))
-            .ToList();
-
-        // 5. Group by CustomerId và tính tổng điểm
-        var customerPointsMap = allMonthlyPoints
+        // 2. Thực hiện GroupBy và Sum ngay tại Database
+        var statsQuery = query
             .GroupBy(mp => mp.CustomerId)
             .Select(g => new
             {
                 CustomerId = g.Key,
                 TotalMonthlyPoints = g.Sum(mp => mp.MonthlyTotal)
             })
-            .OrderByDescending(x => x.TotalMonthlyPoints)
-            .ToList();
+            .OrderByDescending(x => x.TotalMonthlyPoints);
 
-        var totalRecords = customerPointsMap.Count;
+        // 3. Đếm tổng số bản ghi bằng SQL Count
+        var totalRecords = statsQuery.Count();
 
-        // 6. Áp dụng pagination
-        var pagedCustomerPoints = customerPointsMap
+        // 4. Phân trang tại Database (Chỉ lấy đúng số PageSize bản ghi)
+        var pagedData = statsQuery
             .Skip((request.PageNumber - 1) * request.PageSize)
             .Take(request.PageSize)
             .ToList();
 
-        // 7. Lấy thông tin User tương ứng
-        var customerIds = pagedCustomerPoints.Select(x => x.CustomerId).ToList();
-        var users = (await _unitOfWork.Users.GetAllAsync())
+        // 5. Chỉ lấy thông tin User của những người có trong trang này
+        var customerIds = pagedData.Select(x => x.CustomerId).ToList();
+        var users = _unitOfWork.Users.Query()
             .Where(u => customerIds.Contains(u.UserId))
             .ToDictionary(u => u.UserId);
 
-        // 8. Map sang DTO với thứ hạng
+        // 6. Map kết quả cuối cùng
         var startRank = (request.PageNumber - 1) * request.PageSize + 1;
-        var items = pagedCustomerPoints.Select((item, index) =>
+        var items = pagedData.Select((item, index) =>
         {
             var user = users.GetValueOrDefault(item.CustomerId);
             return new MonthlyLeaderboardItemDto(
@@ -88,10 +71,8 @@ public class GetMonthlyLeaderboardQueryHandler : IRequestHandler<GetMonthlyLeade
         }).ToList();
 
         return new MonthlyLeaderboardResult(
-            StartMonth: startMonth,
-            StartYear: startYear,
-            EndMonth: endMonth,
-            EndYear: endYear,
+            StartMonth: startMonth, StartYear: startYear,
+            EndMonth: endMonth, EndYear: endYear,
             Items: items,
             TotalRecords: totalRecords,
             PageNumber: request.PageNumber,
@@ -100,16 +81,4 @@ public class GetMonthlyLeaderboardQueryHandler : IRequestHandler<GetMonthlyLeade
         );
     }
 
-    /// <summary>
-    /// Kiểm tra tháng/năm có nằm trong khoảng không
-    /// </summary>
-    private bool IsInRange(int month, int year, int startMonth, int startYear, int endMonth, int endYear)
-    {
-        var date = new DateTime(year, month, 1);
-        var startDate = new DateTime(startYear, startMonth, 1);
-        var endDate = new DateTime(endYear, endMonth, 1);
-
-        return date >= startDate && date <= endDate;
-    }
 }
-

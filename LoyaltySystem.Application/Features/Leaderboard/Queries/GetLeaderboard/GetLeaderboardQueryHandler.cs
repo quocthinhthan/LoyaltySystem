@@ -1,6 +1,7 @@
 using LoyaltySystem.Domain.Entities;
 using LoyaltySystem.Domain.Interfaces;
 using MediatR;
+using System.Linq; // Chỉ dùng LINQ chuẩn của C#
 
 namespace LoyaltySystem.Application.Features.Leaderboard.Queries.GetLeaderboard;
 
@@ -13,24 +14,24 @@ public class GetLeaderboardQueryHandler : IRequestHandler<GetLeaderboardQuery, L
         _userRepository = userRepository;
     }
 
-    public async Task<LeaderboardResult> Handle(GetLeaderboardQuery request, CancellationToken cancellationToken)
+    public Task<LeaderboardResult> Handle(GetLeaderboardQuery request, CancellationToken cancellationToken)
     {
-        // 1. Query customers và sắp xếp (trên DB)
-        var customers = _userRepository.Query()
+        // 1. Lấy Queryable từ Repository
+        var query = _userRepository.Query()
             .Where(u => u.Role == "Customer")
             .OrderByDescending(u => u.TotalPoint);
 
-        // 2. Count
-        var totalRecords = customers.Count();
+        // 2. Thực hiện các phép toán (Validator đã đảm bảo PageNumber >= 1 và PageSize >= 1)
+        var totalRecords = query.Count();
 
-        // 3. Pagination
-        var pagedCustomers = customers
+        var pagedCustomers = query
             .Skip((request.PageNumber - 1) * request.PageSize)
             .Take(request.PageSize)
             .ToList();
 
-        // 4. Map sang DTO với rank
+        // 3. Tính toán Rank và Map sang DTO
         var startRank = (request.PageNumber - 1) * request.PageSize + 1;
+
         var items = pagedCustomers.Select((customer, index) => new LeaderboardItemDto(
             Rank: startRank + index,
             UserId: customer.UserId,
@@ -41,13 +42,15 @@ public class GetLeaderboardQueryHandler : IRequestHandler<GetLeaderboardQuery, L
 
         var totalPages = (int)Math.Ceiling(totalRecords / (double)request.PageSize);
 
-        return new LeaderboardResult(
+        var result = new LeaderboardResult(
             Items: items,
             TotalRecords: totalRecords,
             PageNumber: request.PageNumber,
             PageSize: request.PageSize,
             TotalPages: totalPages
         );
+
+        // Trả về Task hoàn thành vì Interface IRequestHandler yêu cầu trả về Task
+        return Task.FromResult(result);
     }
 }
-

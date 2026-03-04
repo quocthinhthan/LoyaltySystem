@@ -3,16 +3,16 @@ using LoyaltySystem.Domain.Interfaces;
 using MediatR;
 using BCrypt.Net;
 
-namespace LoyaltySystem.Application.Features.Auth.Commands
-{
-    public class RegisterHandler : IRequestHandler<RegisterCommand, int>
-    {
-        private readonly IUnitOfWork _unitOfWork;
+namespace LoyaltySystem.Application.Features.Auth.Commands.Register;
 
-        public RegisterHandler(IUnitOfWork unitOfWork)
-        {
-            _unitOfWork = unitOfWork;
-        }
+public class RegisterHandler : IRequestHandler<RegisterCommand, int>
+{
+    private readonly IUnitOfWork _unitOfWork;
+
+    public RegisterHandler(IUnitOfWork unitOfWork)
+    {
+        _unitOfWork = unitOfWork;
+    }
 
         public async Task<int> Handle(RegisterCommand request, CancellationToken cancellationToken)
         {

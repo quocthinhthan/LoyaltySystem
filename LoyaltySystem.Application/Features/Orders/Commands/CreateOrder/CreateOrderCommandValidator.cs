@@ -14,10 +14,5 @@ public class CreateOrderCommandValidator : AbstractValidator<CreateOrderCommand>
         RuleFor(x => x.Price)
             .GreaterThan(0).WithMessage("Số tiền phải lớn hơn 0")
             .LessThanOrEqualTo(100_000_000).WithMessage("Số tiền không hợp lệ");
-
-        RuleFor(x => x.StaffId)
-            .NotEmpty().WithMessage("Mã nhân viên không được để trống")
-            .Must(id => int.TryParse(id, out var result) && result > 0)
-            .WithMessage("Mã nhân viên phải là số nguyên dương");
     }
 }

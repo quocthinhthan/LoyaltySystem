@@ -1,6 +1,8 @@
+using LoyaltySystem.Application.Common.Interfaces;
 using LoyaltySystem.Domain.Entities;
 using LoyaltySystem.Domain.Interfaces;
 using MediatR;
+using System.Linq;
 
 namespace LoyaltySystem.Application.Features.Orders.Queries.GetOrders;
 
@@ -8,41 +10,39 @@ public class GetOrdersQueryHandler : IRequestHandler<GetOrdersQuery, GetOrdersRe
 {
     private readonly IGenericRepository<Order> _orderRepository;
     private readonly IGenericRepository<User> _userRepository;
+    private readonly ICurrentUserService _currentUserService; // Inject Context
 
     public GetOrdersQueryHandler(
         IGenericRepository<Order> orderRepository,
-        IGenericRepository<User> userRepository)
+        IGenericRepository<User> userRepository,
+        ICurrentUserService currentUserService)
     {
         _orderRepository = orderRepository;
         _userRepository = userRepository;
+        _currentUserService = currentUserService;
     }
 
     public async Task<GetOrdersResult> Handle(GetOrdersQuery request, CancellationToken cancellationToken)
     {
-        // ===== 1. Kiểm tra quyền =====
-        if (request.Role == "Customer")
-        {
-            if (request.UserQueryId != request.UserId.ToString())
-            {
-                throw new UnauthorizedAccessException("Người dùng không thể xem đơn hàng của người khác.");
-            }
-        }
+        // 1. Lấy thông tin từ Identity Context
+        var currentUserRole = _currentUserService.Role;
+        var currentUserId = int.Parse(_currentUserService.UserId ?? "0");
 
-        // ===== 2. Query database =====
+        // 2. Khởi tạo Queryable
         var orders = _orderRepository.Query();
         var users = _userRepository.Query();
 
-        // ===== 3. Lọc theo UserId =====
-        if (request.UserId > 0)
+        // 3. Phân quyền dữ liệu (Data Isolation)
+        if (currentUserRole == "Customer")
         {
-            orders = orders.Where(o => o.CustomerId == request.UserId);
+            // Nếu là khách hàng, CHỈ được thấy đơn hàng của chính mình
+            orders = orders.Where(o => o.CustomerId == currentUserId);
         }
 
-        // ===== 4. Filter theo thời gian =====
+        // 4. Lọc theo thời gian
         if (request.StartDate.HasValue)
         {
-            var startDate = request.StartDate.Value;
-            orders = orders.Where(o => o.TimeCreate >= startDate);
+            orders = orders.Where(o => o.TimeCreate >= request.StartDate.Value);
         }
 
         if (request.EndDate.HasValue)
@@ -51,101 +51,53 @@ public class GetOrdersQueryHandler : IRequestHandler<GetOrdersQuery, GetOrdersRe
             orders = orders.Where(o => o.TimeCreate < endDate);
         }
 
-        // ===== 5. Filter theo phone =====
-        if (!string.IsNullOrEmpty(request.CustomerPhone) && request.Role != "Customer")
+        // 5. Lọc theo số điện thoại (Chỉ áp dụng cho Staff/Admin)
+        if (!string.IsNullOrEmpty(request.CustomerPhone) && currentUserRole != "Customer")
         {
-            string phone = request.CustomerPhone;
-
             orders = orders.Where(o =>
-                users.Any(u => u.UserId == o.CustomerId &&
-                               u.PhoneNumber.Contains(phone)));
+                users.Any(u => u.UserId == o.CustomerId && u.PhoneNumber.Contains(request.CustomerPhone)));
         }
 
-        // ===== 6. Sorting =====
-        string sortBy = request.SortBy ?? "timecreate";
-        sortBy = sortBy.ToLower();
-
+        // 6. Sắp xếp
+        string sortBy = (request.SortBy ?? "TimeCreate").ToLower();
         if (sortBy == "price")
         {
-            orders = request.IsDescending
-                ? orders.OrderByDescending(o => o.Price)
-                : orders.OrderBy(o => o.Price);
+            orders = request.IsDescending ? orders.OrderByDescending(o => o.Price) : orders.OrderBy(o => o.Price);
         }
         else
         {
-            orders = request.IsDescending
-                ? orders.OrderByDescending(o => o.TimeCreate)
-                : orders.OrderBy(o => o.TimeCreate);
+            orders = request.IsDescending ? orders.OrderByDescending(o => o.TimeCreate) : orders.OrderBy(o => o.TimeCreate);
         }
 
-        // ===== 7. Count =====
+        // 7. Phân trang
         var totalRecords = orders.Count();
-
-        // ===== 8. Pagination =====
-        int pageNumber = request.PageNumber <= 0 ? 1 : request.PageNumber;
-        int pageSize = request.PageSize <= 0 ? 10 : request.PageSize;
-
         var pagedOrders = orders
-            .Skip((pageNumber - 1) * pageSize)
-            .Take(pageSize)
+            .Skip((request.PageNumber - 1) * request.PageSize)
+            .Take(request.PageSize)
             .ToList();
 
-        // ===== 9. Lấy user liên quan =====
-        var userIds = pagedOrders
-            .Select(o => o.CustomerId)
-            .Concat(pagedOrders.Select(o => o.StaffId))
-            .Distinct()
-            .ToList();
+        // 8. Lấy thông tin User liên quan (Batching)
+        var userIds = pagedOrders.Select(o => o.CustomerId).Concat(pagedOrders.Select(o => o.StaffId)).Distinct().ToList();
+        var relatedUsers = users.Where(u => userIds.Contains(u.UserId)).ToDictionary(u => u.UserId);
 
-        var relatedUsersList = users
-            .Where(u => userIds.Contains(u.UserId))
-            .ToList();
+        // 9. Map DTO
+        var orderDtos = pagedOrders.Select(o => {
+            relatedUsers.TryGetValue(o.CustomerId, out var customer);
+            relatedUsers.TryGetValue(o.StaffId, out var staff);
 
-        var relatedUsers = relatedUsersList.ToDictionary(u => u.UserId);
-
-        // ===== 10. Map DTO =====
-        var orderDtos = new List<OrderDto>();
-
-        foreach (var o in pagedOrders)
-        {
-            string customerName = "Unknown";
-            string customerPhone = "N/A";
-            string staffName = "Unknown";
-
-            if (relatedUsers.TryGetValue(o.CustomerId, out var customer))
-            {
-                customerName = customer.UserName;
-                customerPhone = customer.PhoneNumber;
-            }
-
-            if (relatedUsers.TryGetValue(o.StaffId, out var staff))
-            {
-                staffName = staff.UserName;
-            }
-
-            var dto = new OrderDto(
+            return new OrderDto(
                 o.OrderId,
-                customerName,
-                customerPhone,
+                customer?.UserName ?? "Unknown",
+                customer?.PhoneNumber ?? "N/A",
                 o.Price,
                 (int)(o.Price / 1000),
                 o.TimeCreate,
-                staffName
+                staff?.UserName ?? "Unknown"
             );
+        }).ToList();
 
-            orderDtos.Add(dto);
-        }
-
-        // ===== 11. Pagination metadata =====
-        int totalPages = (int)Math.Ceiling((double)totalRecords / pageSize);
-
-        var pagination = new PaginationMetadata(
-            pageNumber,
-            pageSize,
-            totalRecords,
-            totalPages
-        );
-
-        return new GetOrdersResult(orderDtos, pagination);
+        // 10. Metadata phân trang
+        int totalPages = (int)Math.Ceiling((double)totalRecords / request.PageSize);
+        return new GetOrdersResult(orderDtos, new PaginationMetadata(request.PageNumber, request.PageSize, totalRecords, totalPages));
     }
 }
