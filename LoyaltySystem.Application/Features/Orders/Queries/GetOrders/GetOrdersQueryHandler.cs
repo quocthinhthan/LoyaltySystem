@@ -1,6 +1,5 @@
 using LoyaltySystem.Domain.Interfaces;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 
 namespace LoyaltySystem.Application.Features.Orders.Queries.GetOrders;
 
@@ -31,7 +30,7 @@ public class GetOrdersQueryHandler : IRequestHandler<GetOrdersQuery, GetOrdersRe
         // ===== 3. Lọc theo UserId =====
         if (request.UserId > 0)
         {
-            query = query.Where(o => o.CustomerId == request.UserId);
+            orders = orders.Where(o => o.CustomerId == request.UserId);
         }
 
         // ===== 4. Lọc theo thời gian =====

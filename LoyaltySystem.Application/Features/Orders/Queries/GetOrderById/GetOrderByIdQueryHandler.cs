@@ -1,7 +1,6 @@
 using LoyaltySystem.Domain.Entities;
 using LoyaltySystem.Domain.Interfaces;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 
 namespace LoyaltySystem.Application.Features.Orders.Queries.GetOrderById;
 
@@ -29,9 +28,12 @@ public class GetOrderByIdQueryHandler : IRequestHandler<GetOrderByIdQuery, Order
         }
 
         // 2. Kiểm tra quyền
-        if (request.Role == "Customer" && order.CustomerId != request.UserId)
+        if (request.Role == "Customer")
         {
-            throw new UnauthorizedAccessException("Bạn không có quyền xem đơn hàng này");
+            if (!int.TryParse(request.UserId, out int userId) || order.CustomerId != userId)
+            {
+                throw new UnauthorizedAccessException("Bạn không có quyền xem đơn hàng này");
+            }
         }
 
         // 3. Lấy customer
@@ -44,24 +46,24 @@ public class GetOrderByIdQueryHandler : IRequestHandler<GetOrderByIdQuery, Order
 
         // 4. Lấy staff
         var staff = await _userRepository.GetByIdAsync(order.StaffId);
-        
+
 
         // 5. Map DTO
         var result = new OrderDetailResult(
             OrderId: order.OrderId,
             Customer: new CustomerInfo(
-                UserId: result.Customer.UserId,
-                UserName: result.Customer.UserName,
-                PhoneNumber: result.Customer.PhoneNumber,
-                TotalPoints: result.Customer.TotalPoint
+                UserId: customer.UserId,
+                UserName: customer.UserName,
+                PhoneNumber: customer.PhoneNumber,
+                TotalPoints: customer.TotalPoint
             ),
             Staff: new StaffInfo(
-                UserId: result.Staff?.UserId ?? 0,
-                UserName: result.Staff?.UserName ?? "Unknown"
+                UserId: staff?.UserId ?? 0,
+                UserName: staff?.UserName ?? "Unknown"
             ),
-            Price: result.Order.Price,
-            PointsEarned: (int)(result.Order.Price / 1000),
-            TimeCreate: result.Order.TimeCreate
+            Price: order.Price,
+            PointsEarned: (int)(order.Price / 1000),
+            TimeCreate: order.TimeCreate
         );
 
         return result;
