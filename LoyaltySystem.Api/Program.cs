@@ -38,7 +38,7 @@ builder.Services.AddApplicationServices();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
-
+builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
 
 // 5. Cấu hình JWT
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
