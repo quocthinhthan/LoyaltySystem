@@ -1,6 +1,7 @@
 using LoyaltySystem.Application.Common.Interfaces;
 using LoyaltySystem.Domain.Interfaces;
 using MediatR;
+using BCrypt.Net;
 
 namespace LoyaltySystem.Application.Features.Auth.Commands.Login;
 
@@ -21,9 +22,16 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResult>
         var account = await _unitOfWork.Account
             .FirstOrDefaultAsync(x => x.PhoneNumber == request.PhoneNumber);
 
-        if (account == null || account.Password != request.Password)
+        if (account == null)
         {
             throw new Exception("Số điện thoại hoặc mật khẩu không chính xác."); 
+        }
+
+        bool isPasswordValid = BCrypt.Net.BCrypt.Verify(request.Password, account.Password);
+
+        if (!isPasswordValid)
+        {
+            throw new Exception("Số điện thoại hoặc mật khẩu không chính xác.");
         }
 
         // 2. Lấy thông tin User

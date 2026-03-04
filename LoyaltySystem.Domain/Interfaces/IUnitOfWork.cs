@@ -16,5 +16,9 @@ namespace LoyaltySystem.Domain.Interfaces
         
         // Hàm lưu tất cả thay đổi vào DB (Transaction)
         Task<int> CompleteAsync();
+
+        Task BeginTransactionAsync();
+        Task RollbackAsync();
+        Task CommitAsync();
     }
 }

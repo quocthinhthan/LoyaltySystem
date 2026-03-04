@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using LoyaltySystem.Domain.Interfaces;
+using LoyaltySystem.Infrastructure.Data;
 
 namespace LoyaltySystem.Infrastructure.Repositories
 {
