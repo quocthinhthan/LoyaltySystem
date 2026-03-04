@@ -48,22 +48,8 @@ public class LeaderboardController : ControllerBase
     /// - Xem cả năm 2026: ?startMonth=1&amp;startYear=2026&amp;endMonth=12&amp;endYear=2026
     /// </remarks>
     [HttpGet("monthly")]
-    public async Task<IActionResult> GetMonthlyLeaderboard(
-        [FromQuery] int? startMonth = null,
-        [FromQuery] int? startYear = null,
-        [FromQuery] int? endMonth = null,
-        [FromQuery] int? endYear = null,
-        [FromQuery] int pageNumber = 1,
-        [FromQuery] int pageSize = 50)
+    public async Task<IActionResult> GetMonthlyLeaderboard([FromQuery] GetMonthlyLeaderboardQuery query)
     {
-        var query = new GetMonthlyLeaderboardQuery(
-            startMonth,
-            startYear,
-            endMonth,
-            endYear,
-            pageNumber,
-            pageSize
-        );
         var result = await _mediator.Send(query);
         return Ok(result);
     }
