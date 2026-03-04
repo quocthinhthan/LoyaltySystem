@@ -14,16 +14,20 @@ public class GetOrderByIdQueryHandler : IRequestHandler<GetOrderByIdQuery, Order
 
     public async Task<OrderDetailResult> Handle(GetOrderByIdQuery request, CancellationToken cancellationToken)
     {
+
         // 1. Lấy order
         var order = await _unitOfWork.Orders.GetByIdAsync(request.OrderId);
+
         
         if (order == null)
         {
             throw new Exception($"Không tìm thấy đơn hàng #{request.OrderId}");
         }
 
+
+
         // 2. Kiểm tra quyền: Customer chỉ xem order của mình
-        if (request.Role == "Customer" && order.CustomerId != request.UserId)
+        if (request.Role == "Customer" && order.CustomerId != int.Parse(request.UserId))
         {
             throw new UnauthorizedAccessException("Bạn không có quyền xem đơn hàng này");
         }
