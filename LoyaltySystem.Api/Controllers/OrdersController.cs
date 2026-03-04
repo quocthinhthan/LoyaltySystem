@@ -87,12 +87,11 @@ public class OrdersController : ControllerBase
     /// </summary>
     [HttpGet("{orderId}")]
     [Authorize]
-    public async Task<IActionResult> GetOrderById(
-        int orderId,
-        [FromQuery] int userId,
-        [FromQuery] string role = "Customer")
+    public async Task<IActionResult> GetOrderById(int orderId)
     {
-        var query = new GetOrderByIdQuery(orderId, userId, role);
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+        var userRole = User.FindFirst(ClaimTypes.Role)?.Value ?? "";
+        var query = new GetOrderByIdQuery(orderId, userId, userRole);
         var result = await _mediator.Send(query);
         return Ok(result);
     }

@@ -1,6 +1,7 @@
 using LoyaltySystem.Domain.Entities;
 using LoyaltySystem.Domain.Interfaces;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 
 namespace LoyaltySystem.Application.Features.Orders.Queries.GetOrderById;
 
@@ -49,18 +50,18 @@ public class GetOrderByIdQueryHandler : IRequestHandler<GetOrderByIdQuery, Order
         var result = new OrderDetailResult(
             OrderId: order.OrderId,
             Customer: new CustomerInfo(
-                UserId: customer.UserId,
-                UserName: customer.UserName,
-                PhoneNumber: customer.PhoneNumber,
-                TotalPoints: customer.TotalPoint
+                UserId: result.Customer.UserId,
+                UserName: result.Customer.UserName,
+                PhoneNumber: result.Customer.PhoneNumber,
+                TotalPoints: result.Customer.TotalPoint
             ),
             Staff: new StaffInfo(
-                UserId: staff?.UserId ?? 0,
-                UserName: staff?.UserName ?? "Unknown"
+                UserId: result.Staff?.UserId ?? 0,
+                UserName: result.Staff?.UserName ?? "Unknown"
             ),
-            Price: order.Price,
-            PointsEarned: (int)(order.Price / 1000),
-            TimeCreate: order.TimeCreate
+            Price: result.Order.Price,
+            PointsEarned: (int)(result.Order.Price / 1000),
+            TimeCreate: result.Order.TimeCreate
         );
 
         return result;
