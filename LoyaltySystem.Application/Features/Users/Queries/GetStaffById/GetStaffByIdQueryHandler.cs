@@ -20,10 +20,16 @@ public class GetStaffByIdQueryHandler : IRequestHandler<GetStaffByIdQuery, Staff
 
     public async Task<StaffDetailResult> Handle(GetStaffByIdQuery request, CancellationToken cancellationToken)
     {
-        // 1. Lấy thông tin nhân viên qua Interface Repository
+        // 1. Kiểm tra quyền: Nếu là Staff, ID yêu cầu phải là ID của chính họ
+        if (request.CurrentUserRole == "Staff" && request.CurrentUserId != request.StaffId)
+        {
+            throw new UnauthorizedAccessException("Bạn không có quyền xem thông tin của nhân viên khác.");
+        }
+
+        // 2. Lấy thông tin nhân viên
         var staff = await _userRepository.FirstOrDefaultAsync(u => u.UserId == request.StaffId);
 
-        if (staff == null || staff.Role != "Staff")
+        if (staff == null || staff.Role != "Staff" || staff.Role != "Admin")
         {
             throw new KeyNotFoundException($"Không tìm thấy nhân viên #{request.StaffId}");
         }

@@ -2,4 +2,8 @@
 
 namespace LoyaltySystem.Application.Features.Users.Queries.GetCustomerById;
 
-public record GetCustomerByIdQuery(int CustomerId) : IRequest<CustomerDetailResult>;
+public record GetCustomerByIdQuery(
+    int CustomerId, 
+    int CurrentUserId, 
+    string CurrentUserRole
+) : IRequest<CustomerDetailResult>;

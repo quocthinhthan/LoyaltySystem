@@ -1,10 +1,11 @@
-using LoyaltySystem.Application.Features.Users.Queries.GetStaffs;
-using LoyaltySystem.Application.Features.Users.Queries.GetStaffById;
-using LoyaltySystem.Application.Features.Users.Queries.GetCustomers;
 using LoyaltySystem.Application.Features.Users.Queries.GetCustomerById;
+using LoyaltySystem.Application.Features.Users.Queries.GetCustomers;
+using LoyaltySystem.Application.Features.Users.Queries.GetStaffById;
+using LoyaltySystem.Application.Features.Users.Queries.GetStaffs;
 using MediatR;
 using Microsoft.AspNetCore.Authorization; // Thêm namespace này
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace LoyaltySystem.Api.Controllers;
 
@@ -30,9 +31,17 @@ public class UsersController : ControllerBase
     /// [Admin] Xem chi tiết một nhân viên
     /// </summary>
     [HttpGet("staffs/{staffId}")]
-    [Authorize(Policy = "AdminOnly")]
+    [Authorize(Policy = "StaffOrAdmin")] // Đổi từ AdminOnly sang StaffOrAdmin
     public async Task<IActionResult> GetStaffById(int staffId, CancellationToken ct)
-        => Ok(await _mediator.Send(new GetStaffByIdQuery(staffId), ct));
+    {
+        // Lấy thông tin từ Token đã được giải mã
+        var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+        var currentUserRole = User.FindFirst(ClaimTypes.Role)?.Value ?? "";
+
+        var query = new GetStaffByIdQuery(staffId, currentUserId, currentUserRole);
+        var result = await _mediator.Send(query, ct);
+        return Ok(result);
+    }
 
     // ========== STAFF & ADMIN ENDPOINTS ==========
 
@@ -48,7 +57,15 @@ public class UsersController : ControllerBase
     /// [Staff/Admin] Xem chi tiết hồ sơ khách hàng
     /// </summary>
     [HttpGet("customers/{customerId}")]
-    [Authorize(Policy = "StaffOrAdmin")]
+    [Authorize(Policy = "AllRoll")]
     public async Task<IActionResult> GetCustomerById(int customerId, CancellationToken ct)
-        => Ok(await _mediator.Send(new GetCustomerByIdQuery(customerId), ct));
+    {
+        // Lấy ID và Role từ Claims đã được AuthenticationMiddleware giải mã
+        var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+        var currentUserRole = User.FindFirst(ClaimTypes.Role)?.Value ?? "";
+
+        var query = new GetCustomerByIdQuery(customerId, currentUserId, currentUserRole);
+        var result = await _mediator.Send(query, ct);
+        return Ok(result);
+    }
 }

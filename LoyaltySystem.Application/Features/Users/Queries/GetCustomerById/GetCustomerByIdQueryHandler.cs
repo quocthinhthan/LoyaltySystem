@@ -22,7 +22,13 @@ public class GetCustomerByIdQueryHandler : IRequestHandler<GetCustomerByIdQuery,
 
     public async Task<CustomerDetailResult> Handle(GetCustomerByIdQuery request, CancellationToken cancellationToken)
     {
-        // 1. Lấy Customer sử dụng phương thức Async có sẵn trong Interface
+        // 1. Kiểm tra quyền truy cập (Giống logic GetOrders)
+        if (request.CurrentUserRole == "Customer" && request.CurrentUserId != request.CustomerId)
+        {
+            throw new UnauthorizedAccessException("Bạn không có quyền xem thông tin của người khác.");
+        }
+
+        // 2. Lấy thông tin Customer
         var customer = await _userRepository.FirstOrDefaultAsync(u => u.UserId == request.CustomerId);
 
         if (customer == null || customer.Role != "Customer")

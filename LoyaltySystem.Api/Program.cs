@@ -70,6 +70,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("StaffOnly", policy => policy.RequireRole("Staff"));
     options.AddPolicy("CustomerOnly", policy => policy.RequireRole("Customer"));
     options.AddPolicy("StaffOrAdmin", policy => policy.RequireRole("Staff", "Admin"));
+    options.AddPolicy("AllRoll", policy => policy.RequireRole("Customer","Staff", "Admin"));
 });
 
 // 7. Cấu hình Swagger với nút Authorize
