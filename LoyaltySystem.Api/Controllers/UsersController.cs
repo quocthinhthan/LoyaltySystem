@@ -34,13 +34,8 @@ public class UsersController : ControllerBase
     [Authorize(Policy = "StaffOrAdmin")] // Đổi từ AdminOnly sang StaffOrAdmin
     public async Task<IActionResult> GetStaffById(int staffId, CancellationToken ct)
     {
-        // Lấy thông tin từ Token đã được giải mã
-        var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
-        var currentUserRole = User.FindFirst(ClaimTypes.Role)?.Value ?? "";
-
-        var query = new GetStaffByIdQuery(staffId, currentUserId, currentUserRole);
-        var result = await _mediator.Send(query, ct);
-        return Ok(result);
+        // Handler sẽ tự check nếu CurrentUser là Staff thì có đang xem chính mình hay không
+        return Ok(await _mediator.Send(new GetStaffByIdQuery(staffId), ct));
     }
 
     // ========== STAFF & ADMIN ENDPOINTS ==========
@@ -57,15 +52,11 @@ public class UsersController : ControllerBase
     /// [Staff/Admin] Xem chi tiết hồ sơ khách hàng
     /// </summary>
     [HttpGet("customers/{customerId}")]
-    [Authorize(Policy = "AllRoll")]
+    [Authorize(Policy = "AllRole")]
     public async Task<IActionResult> GetCustomerById(int customerId, CancellationToken ct)
     {
-        // Lấy ID và Role từ Claims đã được AuthenticationMiddleware giải mã
-        var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
-        var currentUserRole = User.FindFirst(ClaimTypes.Role)?.Value ?? "";
-
-        var query = new GetCustomerByIdQuery(customerId, currentUserId, currentUserRole);
-        var result = await _mediator.Send(query, ct);
-        return Ok(result);
+        // Xóa bỏ logic lấy currentUserId và currentUserRole tại đây
+        return Ok(await _mediator.Send(new GetCustomerByIdQuery(customerId), ct));
     }
+
 }

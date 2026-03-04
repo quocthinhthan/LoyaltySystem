@@ -21,7 +21,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResult>
         var account = await _unitOfWork.Account
             .FirstOrDefaultAsync(x => x.PhoneNumber == request.PhoneNumber);
 
-        if (account == null || !BCrypt.Net.BCrypt.Verify(request.Password, account.Password))
+        if (account == null || account.Password != request.Password)
         {
             throw new Exception("Số điện thoại hoặc mật khẩu không chính xác.");
         }

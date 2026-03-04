@@ -4,6 +4,5 @@ namespace LoyaltySystem.Application.Features.Orders.Commands.CreateOrder;
 
 public record CreateOrderCommand(
     string CustomerPhoneNumber,
-    decimal Price,
-    string StaffId
+    decimal Price
 ) : IRequest<CreateOrderResult>;

@@ -30,6 +30,9 @@ builder.Services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
 // Hỗ trợ lấy thông tin User từ HttpContext (cần cho CurrentUserService)
 builder.Services.AddHttpContextAccessor();
 
+// Thêm dòng này vào phần đăng ký dịch vụ (thường sau AddHttpContextAccessor)
+builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+
 // 3. Đăng ký MediatR để quét các Handler
 //builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(DependencyInjection).Assembly));
 builder.Services.AddApplicationServices();
@@ -70,7 +73,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("StaffOnly", policy => policy.RequireRole("Staff"));
     options.AddPolicy("CustomerOnly", policy => policy.RequireRole("Customer"));
     options.AddPolicy("StaffOrAdmin", policy => policy.RequireRole("Staff", "Admin"));
-    options.AddPolicy("AllRoll", policy => policy.RequireRole("Customer","Staff", "Admin"));
+    options.AddPolicy("AllRole", policy => policy.RequireRole("Customer","Staff", "Admin"));
 });
 
 // 7. Cấu hình Swagger với nút Authorize

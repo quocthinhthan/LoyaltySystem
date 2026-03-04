@@ -1,3 +1,4 @@
+using LoyaltySystem.Application.Common.Interfaces;
 using LoyaltySystem.Domain.Entities;
 using LoyaltySystem.Domain.Interfaces;
 using MediatR;
@@ -10,22 +11,28 @@ public class GetCustomerByIdQueryHandler : IRequestHandler<GetCustomerByIdQuery,
     private readonly IGenericRepository<User> _userRepository;
     private readonly IGenericRepository<Order> _orderRepository;
     private readonly IGenericRepository<MonthlyPoints> _monthlyPointsRepository;
+    private readonly ICurrentUserService _currentUserService; // Dịch vụ lấy ngữ cảnh người dùng
 
     public GetCustomerByIdQueryHandler(
         IGenericRepository<User> userRepository,
         IGenericRepository<Order> orderRepository,
-        IGenericRepository<MonthlyPoints> monthlyPointsRepository)
+        IGenericRepository<MonthlyPoints> monthlyPointsRepository,
+        ICurrentUserService currentUserService)
     {
         _userRepository = userRepository;
         _orderRepository = orderRepository;
         _monthlyPointsRepository = monthlyPointsRepository;
+        _currentUserService = currentUserService;
     }
 
     public async Task<CustomerDetailResult> Handle(GetCustomerByIdQuery request, CancellationToken cancellationToken)
     {
         // 1. Kiểm tra quyền truy cập (Business Logic)
-        // Validator đã đảm bảo CurrentUserId và CustomerId > 0, nên ta chỉ so sánh giá trị
-        if (request.CurrentUserRole == "Customer" && request.CurrentUserId != request.CustomerId)
+        var currentUserRole = _currentUserService.Role;
+        var currentUserId = _currentUserService.UserId;
+
+        // Nếu là Customer, chỉ được xem chính hồ sơ của mình
+        if (currentUserRole == "Customer" && currentUserId != request.CustomerId.ToString())
         {
             throw new UnauthorizedAccessException("Bạn không có quyền xem thông tin của người khác.");
         }
@@ -38,7 +45,7 @@ public class GetCustomerByIdQueryHandler : IRequestHandler<GetCustomerByIdQuery,
             throw new KeyNotFoundException($"Không tìm thấy khách hàng #{request.CustomerId}");
         }
 
-        // 3. Thống kê đơn hàng (Sử dụng IQueryable để lọc tại DB)
+        // 3. Thống kê đơn hàng (Sử dụng IQueryable để thực thi tại Database)
         var ordersQuery = _orderRepository.Query()
             .Where(o => o.CustomerId == request.CustomerId);
 
@@ -51,7 +58,7 @@ public class GetCustomerByIdQueryHandler : IRequestHandler<GetCustomerByIdQuery,
             .Select(o => new RecentOrderDto(
                 o.OrderId,
                 o.Price,
-                (int)(o.Price / 1000),
+                (int)(o.Price / 1000), // Quy tắc tích điểm
                 o.TimeCreate
             ))
             .ToList();
@@ -63,7 +70,7 @@ public class GetCustomerByIdQueryHandler : IRequestHandler<GetCustomerByIdQuery,
         var totalCustomers = _userRepository.Query()
             .Count(u => u.Role == "Customer");
 
-        // 5. Điểm tháng hiện tại
+        // 5. Điểm tích lũy tháng hiện tại
         var now = DateTime.Now;
         var currentMonthPoints = _monthlyPointsRepository.Query()
             .Where(mp => mp.CustomerId == request.CustomerId
@@ -72,7 +79,7 @@ public class GetCustomerByIdQueryHandler : IRequestHandler<GetCustomerByIdQuery,
             .Select(mp => mp.MonthlyTotal)
             .FirstOrDefault();
 
-        // 6. Trả kết quả
+        // 6. Trả kết quả DTO
         return new CustomerDetailResult(
             UserId: customer.UserId,
             UserName: customer.UserName,
