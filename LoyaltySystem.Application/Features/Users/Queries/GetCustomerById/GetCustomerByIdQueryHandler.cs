@@ -1,6 +1,7 @@
 using LoyaltySystem.Domain.Entities;
 using LoyaltySystem.Domain.Interfaces;
 using MediatR;
+using System.Linq;
 
 namespace LoyaltySystem.Application.Features.Users.Queries.GetCustomerById;
 
@@ -22,13 +23,14 @@ public class GetCustomerByIdQueryHandler : IRequestHandler<GetCustomerByIdQuery,
 
     public async Task<CustomerDetailResult> Handle(GetCustomerByIdQuery request, CancellationToken cancellationToken)
     {
-        // 1. Kiểm tra quyền truy cập (Giống logic GetOrders)
+        // 1. Kiểm tra quyền truy cập (Business Logic)
+        // Validator đã đảm bảo CurrentUserId và CustomerId > 0, nên ta chỉ so sánh giá trị
         if (request.CurrentUserRole == "Customer" && request.CurrentUserId != request.CustomerId)
         {
             throw new UnauthorizedAccessException("Bạn không có quyền xem thông tin của người khác.");
         }
 
-        // 2. Lấy thông tin Customer
+        // 2. Lấy thông tin Customer và kiểm tra tồn tại (Data Validation)
         var customer = await _userRepository.FirstOrDefaultAsync(u => u.UserId == request.CustomerId);
 
         if (customer == null || customer.Role != "Customer")
@@ -36,8 +38,7 @@ public class GetCustomerByIdQueryHandler : IRequestHandler<GetCustomerByIdQuery,
             throw new KeyNotFoundException($"Không tìm thấy khách hàng #{request.CustomerId}");
         }
 
-        // 2. Thống kê đơn hàng thông qua IQueryable (System.Linq)
-        // Lưu ý: Không dùng .ToListAsync() của EF mà dùng .ToList() của Linq
+        // 3. Thống kê đơn hàng (Sử dụng IQueryable để lọc tại DB)
         var ordersQuery = _orderRepository.Query()
             .Where(o => o.CustomerId == request.CustomerId);
 
@@ -55,14 +56,14 @@ public class GetCustomerByIdQueryHandler : IRequestHandler<GetCustomerByIdQuery,
             ))
             .ToList();
 
-        // 3. Xếp hạng & Tổng số khách hàng
+        // 4. Xếp hạng & Tổng số khách hàng
         var rank = _userRepository.Query()
             .Count(u => u.Role == "Customer" && u.TotalPoint > customer.TotalPoint) + 1;
 
         var totalCustomers = _userRepository.Query()
             .Count(u => u.Role == "Customer");
 
-        // 4. Điểm tháng hiện tại
+        // 5. Điểm tháng hiện tại
         var now = DateTime.Now;
         var currentMonthPoints = _monthlyPointsRepository.Query()
             .Where(mp => mp.CustomerId == request.CustomerId
@@ -71,6 +72,7 @@ public class GetCustomerByIdQueryHandler : IRequestHandler<GetCustomerByIdQuery,
             .Select(mp => mp.MonthlyTotal)
             .FirstOrDefault();
 
+        // 6. Trả kết quả
         return new CustomerDetailResult(
             UserId: customer.UserId,
             UserName: customer.UserName,

@@ -1,6 +1,7 @@
 using LoyaltySystem.Domain.Entities;
 using LoyaltySystem.Domain.Interfaces;
 using MediatR;
+using System.Linq;
 
 namespace LoyaltySystem.Application.Features.Orders.Queries.GetOrders;
 
@@ -19,7 +20,7 @@ public class GetOrdersQueryHandler : IRequestHandler<GetOrdersQuery, GetOrdersRe
 
     public async Task<GetOrdersResult> Handle(GetOrdersQuery request, CancellationToken cancellationToken)
     {
-        // ===== 1. Kiểm tra quyền =====
+        // 1. Kiểm tra quyền (Authorization - Validator đã đảm bảo UserQueryId là số)
         if (request.Role == "Customer")
         {
             if (request.UserQueryId != request.UserId.ToString())
@@ -28,124 +29,77 @@ public class GetOrdersQueryHandler : IRequestHandler<GetOrdersQuery, GetOrdersRe
             }
         }
 
-        // ===== 2. Query database =====
+        // 2. Query database (Sử dụng IQueryable để tối ưu việc lọc tại DB)
         var orders = _orderRepository.Query();
         var users = _userRepository.Query();
 
-        // ===== 3. Lọc theo UserId =====
+        // 3. Lọc theo UserId (Lấy đơn hàng của một User cụ thể)
         if (request.UserId > 0)
         {
             orders = orders.Where(o => o.CustomerId == request.UserId);
         }
 
-        // ===== 4. Filter theo thời gian =====
+        // 4. Filter theo thời gian
         if (request.StartDate.HasValue)
         {
-            var startDate = request.StartDate.Value;
-            orders = orders.Where(o => o.TimeCreate >= startDate);
+            orders = orders.Where(o => o.TimeCreate >= request.StartDate.Value);
         }
 
         if (request.EndDate.HasValue)
         {
+            // Kết thúc ngày là 23:59:59 của ngày đó
             var endDate = request.EndDate.Value.AddDays(1);
             orders = orders.Where(o => o.TimeCreate < endDate);
         }
 
-        // ===== 5. Filter theo phone =====
+        // 5. Filter theo phone (Chỉ Staff/Admin mới được dùng lọc theo Phone)
         if (!string.IsNullOrEmpty(request.CustomerPhone) && request.Role != "Customer")
         {
-            string phone = request.CustomerPhone;
-
             orders = orders.Where(o =>
-                users.Any(u => u.UserId == o.CustomerId &&
-                               u.PhoneNumber.Contains(phone)));
+                users.Any(u => u.UserId == o.CustomerId && u.PhoneNumber.Contains(request.CustomerPhone)));
         }
 
-        // ===== 6. Sorting =====
-        string sortBy = request.SortBy ?? "timecreate";
-        sortBy = sortBy.ToLower();
+        // 6. Sorting (Validator đã lọc các field hợp lệ)
+        string sortBy = (request.SortBy ?? "TimeCreate").ToLower();
 
         if (sortBy == "price")
         {
-            orders = request.IsDescending
-                ? orders.OrderByDescending(o => o.Price)
-                : orders.OrderBy(o => o.Price);
+            orders = request.IsDescending ? orders.OrderByDescending(o => o.Price) : orders.OrderBy(o => o.Price);
         }
         else
         {
-            orders = request.IsDescending
-                ? orders.OrderByDescending(o => o.TimeCreate)
-                : orders.OrderBy(o => o.TimeCreate);
+            orders = request.IsDescending ? orders.OrderByDescending(o => o.TimeCreate) : orders.OrderBy(o => o.TimeCreate);
         }
 
-        // ===== 7. Count =====
+        // 7. Thực hiện phân trang (Mặc định PageNumber và PageSize đã hợp lệ nhờ Validator)
         var totalRecords = orders.Count();
-
-        // ===== 8. Pagination =====
-        int pageNumber = request.PageNumber <= 0 ? 1 : request.PageNumber;
-        int pageSize = request.PageSize <= 0 ? 10 : request.PageSize;
-
         var pagedOrders = orders
-            .Skip((pageNumber - 1) * pageSize)
-            .Take(pageSize)
+            .Skip((request.PageNumber - 1) * request.PageSize)
+            .Take(request.PageSize)
             .ToList();
 
-        // ===== 9. Lấy user liên quan =====
-        var userIds = pagedOrders
-            .Select(o => o.CustomerId)
-            .Concat(pagedOrders.Select(o => o.StaffId))
-            .Distinct()
-            .ToList();
+        // 8. Lấy thông tin User liên quan để map tên/SĐT
+        var userIds = pagedOrders.Select(o => o.CustomerId).Concat(pagedOrders.Select(o => o.StaffId)).Distinct().ToList();
+        var relatedUsers = users.Where(u => userIds.Contains(u.UserId)).ToDictionary(u => u.UserId);
 
-        var relatedUsersList = users
-            .Where(u => userIds.Contains(u.UserId))
-            .ToList();
+        // 9. Map DTO
+        var orderDtos = pagedOrders.Select(o => {
+            relatedUsers.TryGetValue(o.CustomerId, out var customer);
+            relatedUsers.TryGetValue(o.StaffId, out var staff);
 
-        var relatedUsers = relatedUsersList.ToDictionary(u => u.UserId);
-
-        // ===== 10. Map DTO =====
-        var orderDtos = new List<OrderDto>();
-
-        foreach (var o in pagedOrders)
-        {
-            string customerName = "Unknown";
-            string customerPhone = "N/A";
-            string staffName = "Unknown";
-
-            if (relatedUsers.TryGetValue(o.CustomerId, out var customer))
-            {
-                customerName = customer.UserName;
-                customerPhone = customer.PhoneNumber;
-            }
-
-            if (relatedUsers.TryGetValue(o.StaffId, out var staff))
-            {
-                staffName = staff.UserName;
-            }
-
-            var dto = new OrderDto(
+            return new OrderDto(
                 o.OrderId,
-                customerName,
-                customerPhone,
+                customer?.UserName ?? "Unknown",
+                customer?.PhoneNumber ?? "N/A",
                 o.Price,
-                (int)(o.Price / 1000),
+                (int)(o.Price / 1000), // Quy tắc tích điểm
                 o.TimeCreate,
-                staffName
+                staff?.UserName ?? "Unknown"
             );
+        }).ToList();
 
-            orderDtos.Add(dto);
-        }
-
-        // ===== 11. Pagination metadata =====
-        int totalPages = (int)Math.Ceiling((double)totalRecords / pageSize);
-
-        var pagination = new PaginationMetadata(
-            pageNumber,
-            pageSize,
-            totalRecords,
-            totalPages
-        );
-
-        return new GetOrdersResult(orderDtos, pagination);
+        // 10. Trả về kết quả phân trang
+        int totalPages = (int)Math.Ceiling((double)totalRecords / request.PageSize);
+        return new GetOrdersResult(orderDtos, new PaginationMetadata(request.PageNumber, request.PageSize, totalRecords, totalPages));
     }
 }

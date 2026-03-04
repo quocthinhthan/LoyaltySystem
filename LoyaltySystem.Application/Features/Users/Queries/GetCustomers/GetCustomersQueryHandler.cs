@@ -20,14 +20,11 @@ public class GetCustomersQueryHandler : IRequestHandler<GetCustomersQuery, GetCu
 
     public async Task<GetCustomersResult> Handle(GetCustomersQuery request, CancellationToken cancellationToken)
     {
-        // ===== 1. Kiểm tra quyền (Nếu cần) =====
-        // Thường danh sách khách hàng chỉ dành cho Staff hoặc Admin
-
-        // ===== 2. Query database =====
+        // 1. Query database (Sử dụng IQueryable để tối ưu truy vấn)
         var users = _userRepository.Query();
         var orders = _orderRepository.Query();
 
-        // ===== 3. Lọc Role và SearchTerm =====
+        // 2. Lọc Role và SearchTerm
         var customerQuery = users.Where(u => u.Role == "Customer");
 
         if (!string.IsNullOrWhiteSpace(request.SearchTerm))
@@ -38,8 +35,8 @@ public class GetCustomersQueryHandler : IRequestHandler<GetCustomersQuery, GetCu
                 (u.PhoneNumber != null && u.PhoneNumber.Contains(search)));
         }
 
-        // ===== 4. Sorting =====
-        string sortBy = request.SortBy?.ToLower() ?? "totalpoint";
+        // 3. Sorting (Validator đã lọc các field hợp lệ)
+        string sortBy = (request.SortBy ?? "totalpoint").ToLower();
         if (sortBy == "username")
         {
             customerQuery = request.IsDescending
@@ -53,19 +50,16 @@ public class GetCustomersQueryHandler : IRequestHandler<GetCustomersQuery, GetCu
                 : customerQuery.OrderBy(u => u.TotalPoint);
         }
 
-        // ===== 5. Count & Pagination logic =====
+        // 4. Count & Pagination (Mặc định PageNumber và PageSize đã hợp lệ nhờ Validator)
         var totalRecords = customerQuery.Count();
-        int pageNumber = request.PageNumber <= 0 ? 1 : request.PageNumber;
-        int pageSize = request.PageSize <= 0 ? 10 : request.PageSize;
 
         var pagedCustomers = customerQuery
-            .Skip((pageNumber - 1) * pageSize)
-            .Take(pageSize)
+            .Skip((request.PageNumber - 1) * request.PageSize)
+            .Take(request.PageSize)
             .ToList();
 
-        // ===== 6. Lấy dữ liệu thống kê liên quan (Batch Query) =====
+        // 5. Thống kê liên quan (Batch Query)
         var customerIds = pagedCustomers.Select(c => c.UserId).ToList();
-
         var orderStats = orders
             .Where(o => customerIds.Contains(o.CustomerId))
             .GroupBy(o => o.CustomerId)
@@ -76,7 +70,7 @@ public class GetCustomersQueryHandler : IRequestHandler<GetCustomersQuery, GetCu
             })
             .ToDictionary(x => x.CustomerId);
 
-        // ===== 7. Map DTO =====
+        // 6. Map sang DTO
         var customerDtos = pagedCustomers.Select(c => new CustomerDto(
             c.UserId,
             c.UserName ?? "Unknown",
@@ -86,14 +80,14 @@ public class GetCustomersQueryHandler : IRequestHandler<GetCustomersQuery, GetCu
             orderStats.TryGetValue(c.UserId, out var s) ? s.Total : 0
         )).ToList();
 
-        // ===== 8. Kết quả =====
-        int totalPages = (int)Math.Ceiling((double)totalRecords / pageSize);
+        // 7. Trả kết quả phân trang
+        int totalPages = (int)Math.Ceiling((double)totalRecords / request.PageSize);
 
         return new GetCustomersResult(
             customerDtos,
             totalRecords,
-            pageNumber,
-            pageSize,
+            request.PageNumber,
+            request.PageSize,
             totalPages
         );
     }

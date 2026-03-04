@@ -71,7 +71,7 @@ public class CreateOrderCommandHandler : IRequestHandler<CreateOrderCommand, Cre
         }
         else
         {
-            // Cộng dồn nếu đã có - Dùng Update thay vì Add
+            // Cộng dồn nếu đã có
             monthlyPoint.MonthlyTotal += pointsEarned;
             _unitOfWork.MonthlyPoints.Update(monthlyPoint);
         }

@@ -20,31 +20,30 @@ public class GetStaffByIdQueryHandler : IRequestHandler<GetStaffByIdQuery, Staff
 
     public async Task<StaffDetailResult> Handle(GetStaffByIdQuery request, CancellationToken cancellationToken)
     {
-        // 1. Kiểm tra quyền: Nếu là Staff, ID yêu cầu phải là ID của chính họ
+        // 1. Kiểm tra quyền (Business Logic)
         if (request.CurrentUserRole == "Staff" && request.CurrentUserId != request.StaffId)
         {
             throw new UnauthorizedAccessException("Bạn không có quyền xem thông tin của nhân viên khác.");
         }
 
-        // 2. Lấy thông tin nhân viên
+        // 2. Lấy thông tin nhân viên và kiểm tra tồn tại
         var staff = await _userRepository.FirstOrDefaultAsync(u => u.UserId == request.StaffId);
 
-        if (staff == null || staff.Role != "Staff" || staff.Role != "Admin")
+        // Sửa logic: Nhân viên phải có role Staff hoặc Admin
+        if (staff == null || (staff.Role != "Staff" && staff.Role != "Admin"))
         {
             throw new KeyNotFoundException($"Không tìm thấy nhân viên #{request.StaffId}");
         }
 
-        // 2. Tạo Queryable cho đơn hàng
-        var orders = _orderRepository.Query()
+        // 3. Truy vấn thống kê đơn hàng
+        var ordersQuery = _orderRepository.Query()
             .Where(o => o.StaffId == request.StaffId);
 
-        // 3. Thực hiện thống kê (Sử dụng Linq tiêu chuẩn)
-        var totalOrders = orders.Count();
-        var totalRevenue = orders.Sum(o => o.Price);
+        var totalOrders = ordersQuery.Count();
+        var totalRevenue = ordersQuery.Sum(o => o.Price);
 
-        // 4. Lấy danh sách đơn hàng gần đây
-        // FIX CS0853: Loại bỏ tên tham số (OrderId:, Price:...) trong new RecentOrderDto
-        var recentOrders = orders
+        // 4. Lấy danh sách đơn hàng gần đây (Top 5)
+        var recentOrders = ordersQuery
             .OrderByDescending(o => o.TimeCreate)
             .Take(5)
             .Select(o => new RecentOrderDto(
@@ -54,7 +53,7 @@ public class GetStaffByIdQueryHandler : IRequestHandler<GetStaffByIdQuery, Staff
             ))
             .ToList();
 
-        // 5. Trả về kết quả
+        // 5. Trả về kết quả DTO
         return new StaffDetailResult(
             staff.UserId,
             staff.UserName,
