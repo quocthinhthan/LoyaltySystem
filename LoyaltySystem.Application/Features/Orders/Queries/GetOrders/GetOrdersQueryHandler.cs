@@ -1,5 +1,6 @@
 using LoyaltySystem.Domain.Interfaces;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 
 namespace LoyaltySystem.Application.Features.Orders.Queries.GetOrders;
 
@@ -14,97 +15,80 @@ public class GetOrdersQueryHandler : IRequestHandler<GetOrdersQuery, GetOrdersRe
 
     public async Task<GetOrdersResult> Handle(GetOrdersQuery request, CancellationToken cancellationToken)
     {
-        // 1. ✅ Lấy users một lần ở đầu để dùng cho nhiều mục đích
-        var users = await _unitOfWork.Users.GetAllAsync();
-        var userDict = users.ToDictionary(u => u.UserId);
+        // 1. Khởi tạo query từ IQueryable (Chưa thực thi SQL)
+        var query = _unitOfWork.Orders.GetQueryable();
 
-        if (request.UserQueryId != request.UserId.ToString() && request.Role == "Customer")
+        // 2. Kiểm tra quyền truy cập
+        if (request.Role == "Customer" && request.UserQueryId != request.UserId.ToString())
         {
             throw new UnauthorizedAccessException("Người dùng không thể xem các đơn hàng của người dùng khác!");
         }
 
-        // 2. Lấy tất cả orders
-        var orders = (await _unitOfWork.Orders.GetAllAsync()).AsQueryable();
-
-        // 3. Lọc theo userId
+        // 3. Filter theo UserId
         if (request.UserId > 0)
         {
-            orders = orders.Where(o => o.CustomerId == request.UserId);
+            query = query.Where(o => o.CustomerId == request.UserId);
         }
 
-        // 4. ✅ Filter theo thời gian
+        // 4. Filter theo thời gian
         if (request.StartDate.HasValue)
-        {
-            orders = orders.Where(o => o.TimeCreate >= request.StartDate.Value);
-        }
-
-
+            query = query.Where(o => o.TimeCreate >= request.StartDate.Value);
 
         if (request.EndDate.HasValue)
         {
-            // Thêm 1 ngày để bao gồm cả ngày EndDate
             var endDateInclusive = request.EndDate.Value.AddDays(1);
-            orders = orders.Where(o => o.TimeCreate < endDateInclusive);
+            query = query.Where(o => o.TimeCreate < endDateInclusive);
         }
 
-        // 5. ✅ Filter theo số điện thoại khách hàng (dành cho Staff)
+        // 5. Filter theo số điện thoại (Dùng JOIN chuẩn của LINQ)
         if (!string.IsNullOrEmpty(request.CustomerPhone) && request.Role != "Customer")
         {
-            // ✅ Sử dụng userDict đã lấy ở trên
-            var customerIds = userDict.Values
-                .Where(u => u.PhoneNumber.Contains(request.CustomerPhone))
-                .Select(u => u.UserId)
-                .ToList();
-
-            orders = orders.Where(o => customerIds.Contains(o.CustomerId));
+            var usersQuery = _unitOfWork.Users.GetQueryable();
+            query = from o in query
+                    join u in usersQuery on o.CustomerId equals u.UserId
+                    where u.PhoneNumber.Contains(request.CustomerPhone)
+                    select o;
         }
 
-        // 6. ✅ Sorting
-        orders = request.SortBy.ToLower() switch
+        // 6. Sorting
+        query = request.SortBy.ToLower() switch
         {
-            "price" => request.IsDescending
-                ? orders.OrderByDescending(o => o.Price)
-                : orders.OrderBy(o => o.Price),
-            "timecreate" or _ => request.IsDescending
-                ? orders.OrderByDescending(o => o.TimeCreate)
-                : orders.OrderBy(o => o.TimeCreate)
+            "price" => request.IsDescending ? query.OrderByDescending(o => o.Price) : query.OrderBy(o => o.Price),
+            _ => request.IsDescending ? query.OrderByDescending(o => o.TimeCreate) : query.OrderBy(o => o.TimeCreate)
         };
 
-        // 7. ✅ Đếm tổng số records (trước khi phân trang)
-        var totalRecords = orders.Count();
+        // 7. Đếm tổng số record trên Database
+        var totalRecords = await query.CountAsync(cancellationToken);
 
-        // 8. ✅ Pagination
-        var pagedOrders = orders
+        // 8. Phân trang và Lấy dữ liệu kèm thông tin User (Tối ưu nhất)
+        // Sử dụng Join ở đây giúp SQL lấy tên khách hàng và nhân viên trong 1 lần quét
+        var userQueryable = _unitOfWork.Users.GetQueryable();
+
+        var pagedOrders = await query
             .Skip((request.PageNumber - 1) * request.PageSize)
             .Take(request.PageSize)
-            .ToList();
+            .Select(o => new
+            {
+                Order = o,
+                Customer = userQueryable.FirstOrDefault(u => u.UserId == o.CustomerId),
+                Staff = userQueryable.FirstOrDefault(u => u.UserId == o.StaffId)
+            })
+            .ToListAsync(cancellationToken);
 
-        // 9. ✅ Map sang DTO (sử dụng userDict đã có)
-        var orderDtos = pagedOrders.Select(o => new OrderDto(
-            OrderId: o.OrderId,
-            CustomerName: userDict.ContainsKey(o.CustomerId)
-                ? userDict[o.CustomerId].UserName
-                : "Unknown",
-            CustomerPhone: userDict.ContainsKey(o.CustomerId)
-                ? userDict[o.CustomerId].PhoneNumber
-                : "N/A",
-            Price: o.Price,
-            PointsEarned: (int)(o.Price / 1000),
-            TimeCreate: o.TimeCreate,
-            StaffName: userDict.ContainsKey(o.StaffId)
-                ? userDict[o.StaffId].UserName
-                : "Unknown"
+        // 9. Map kết quả sang DTO
+        var orderDtos = pagedOrders.Select(x => new OrderDto(
+            OrderId: x.Order.OrderId,
+            CustomerName: x.Customer?.UserName ?? "Unknown",
+            CustomerPhone: x.Customer?.PhoneNumber ?? "N/A",
+            Price: x.Order.Price,
+            PointsEarned: (int)(x.Order.Price / 1000),
+            TimeCreate: x.Order.TimeCreate,
+            StaffName: x.Staff?.UserName ?? "Unknown"
         )).ToList();
 
-        // 10. ✅ Tạo metadata phân trang
+        // 10. Metadata phân trang
         var totalPages = (int)Math.Ceiling(totalRecords / (double)request.PageSize);
-
-        var pagination = new PaginationMetadata(
-            CurrentPage: request.PageNumber,
-            PageSize: request.PageSize,
-            TotalRecords: totalRecords,
-            TotalPages: totalPages
-        );
+        var pagination = new PaginationMetadata(request.PageNumber, request.PageSize, totalRecords, totalPages);
 
         return new GetOrdersResult(orderDtos, pagination);
     }

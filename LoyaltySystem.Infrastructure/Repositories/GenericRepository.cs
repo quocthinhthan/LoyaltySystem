@@ -19,7 +19,7 @@ namespace LoyaltySystem.Infrastructure.Repositories
             _context = context;
             _dbSet = context.Set<T>();
         }
-
+        public IQueryable<T> GetQueryable() => _dbSet.AsQueryable();
         public async Task<T?> GetByIdAsync(object id) => await _dbSet.FindAsync(id);
         public async Task<IEnumerable<T>> GetAllAsync() => await _dbSet.ToListAsync();
         public async Task<T?> FirstOrDefaultAsync(Expression<Func<T, bool>> predicate) 

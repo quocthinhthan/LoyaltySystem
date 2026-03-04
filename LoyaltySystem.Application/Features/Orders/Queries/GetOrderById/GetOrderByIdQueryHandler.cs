@@ -1,5 +1,6 @@
 using LoyaltySystem.Domain.Interfaces;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 
 namespace LoyaltySystem.Application.Features.Orders.Queries.GetOrderById;
 
@@ -14,50 +15,54 @@ public class GetOrderByIdQueryHandler : IRequestHandler<GetOrderByIdQuery, Order
 
     public async Task<OrderDetailResult> Handle(GetOrderByIdQuery request, CancellationToken cancellationToken)
     {
+        var userQuery = _unitOfWork.Users.GetQueryable();
+        var orderQuery = _unitOfWork.Orders.GetQueryable();
 
-        // 1. Lấy order
-        var order = await _unitOfWork.Orders.GetByIdAsync(request.OrderId);
+        // 1. Thực hiện Join tất cả thông tin trong 1 câu Query duy nhất
+        var result = await (from o in orderQuery
+                            where o.OrderId == request.OrderId
+                            select new
+                            {
+                                Order = o,
+                                // Join lấy thông tin Customer
+                                Customer = userQuery.FirstOrDefault(u => u.UserId == o.CustomerId),
+                                // Join lấy thông tin Staff
+                                Staff = userQuery.FirstOrDefault(u => u.UserId == o.StaffId)
+                            }).FirstOrDefaultAsync(cancellationToken);
 
-        
-        if (order == null)
+        // 2. Kiểm tra tồn tại
+        if (result == null || result.Order == null)
         {
             throw new Exception($"Không tìm thấy đơn hàng #{request.OrderId}");
         }
 
-
-
-        // 2. Kiểm tra quyền: Customer chỉ xem order của mình
-        if (request.Role == "Customer" && order.CustomerId != int.Parse(request.UserId))
+        // 3. Kiểm tra quyền (Sử dụng dữ liệu đã lấy từ Query)
+        if (request.Role == "Customer" && result.Order.CustomerId != int.Parse(request.UserId))
         {
             throw new UnauthorizedAccessException("Bạn không có quyền xem đơn hàng này");
         }
 
-        // 3. Lấy thông tin customer
-        var customer = await _unitOfWork.Users.GetByIdAsync(order.CustomerId);
-        if (customer == null)
+        if (result.Customer == null)
         {
             throw new Exception("Không tìm thấy thông tin khách hàng");
         }
 
-        // 4. Lấy thông tin staff
-        var staff = await _unitOfWork.Users.GetByIdAsync(order.StaffId);
-
-        // 5. Map sang DTO
+        // 4. Map sang DTO (Dữ liệu đã có sẵn trong biến result, không cần await thêm)
         return new OrderDetailResult(
-            OrderId: order.OrderId,
+            OrderId: result.Order.OrderId,
             Customer: new CustomerInfo(
-                UserId: customer.UserId,
-                UserName: customer.UserName,
-                PhoneNumber: customer.PhoneNumber,
-                TotalPoints: customer.TotalPoint
+                UserId: result.Customer.UserId,
+                UserName: result.Customer.UserName,
+                PhoneNumber: result.Customer.PhoneNumber,
+                TotalPoints: result.Customer.TotalPoint
             ),
             Staff: new StaffInfo(
-                UserId: staff?.UserId ?? 0,
-                UserName: staff?.UserName ?? "Unknown"
+                UserId: result.Staff?.UserId ?? 0,
+                UserName: result.Staff?.UserName ?? "Unknown"
             ),
-            Price: order.Price,
-            PointsEarned: (int)(order.Price / 1000),
-            TimeCreate: order.TimeCreate
+            Price: result.Order.Price,
+            PointsEarned: (int)(result.Order.Price / 1000),
+            TimeCreate: result.Order.TimeCreate
         );
     }
 }
