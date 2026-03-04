@@ -35,6 +35,11 @@ public class ExceptionHandlingMiddleware
             // Lấy danh sách lỗi từ Validator
             responseData = new { error = validationException.Errors.Select(e => e.ErrorMessage) };
         }
+        else if (exception is KeyNotFoundException)
+        {
+            code = HttpStatusCode.NotFound;
+            responseData = new { error = exception.Message };
+        }
         else
         {
             responseData = new { error = exception.Message };
