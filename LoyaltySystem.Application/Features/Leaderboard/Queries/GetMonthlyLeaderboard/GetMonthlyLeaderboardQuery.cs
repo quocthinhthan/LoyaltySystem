@@ -2,12 +2,12 @@ using MediatR;
 
 namespace LoyaltySystem.Application.Features.Leaderboard.Queries.GetMonthlyLeaderboard;
 
-public class GetMonthlyLeaderboardQuery : IRequest<MonthlyLeaderboardResult>
+public record GetMonthlyLeaderboardQuery  : IRequest<MonthlyLeaderboardResult>
 {
-    public int? StartMonth { get; set; }
-    public int? StartYear { get; set; }
-    public int? EndMonth { get; set; }
-    public int? EndYear { get; set; }
-    public int PageNumber { get; set; } = 1;
-    public int PageSize { get; set; } = 50;
+    public int? StartMonth { get; init; } = null;
+    public int? StartYear { get; init; } = null;
+    public int? EndMonth { get; init; } = null;
+    public int? EndYear { get; init; } = null;
+    public int PageNumber { get; init; } = 1;
+    public int PageSize { get; init; } = 50;
 }

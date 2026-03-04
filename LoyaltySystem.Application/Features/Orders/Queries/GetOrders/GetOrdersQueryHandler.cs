@@ -1,3 +1,4 @@
+using LoyaltySystem.Domain.Entities;
 using LoyaltySystem.Domain.Interfaces;
 using MediatR;
 
@@ -5,11 +6,15 @@ namespace LoyaltySystem.Application.Features.Orders.Queries.GetOrders;
 
 public class GetOrdersQueryHandler : IRequestHandler<GetOrdersQuery, GetOrdersResult>
 {
-    private readonly IUnitOfWork _unitOfWork;
+    private readonly IGenericRepository<Order> _orderRepository;
+    private readonly IGenericRepository<User> _userRepository;
 
-    public GetOrdersQueryHandler(IUnitOfWork unitOfWork)
+    public GetOrdersQueryHandler(
+        IGenericRepository<Order> orderRepository,
+        IGenericRepository<User> userRepository)
     {
-        _unitOfWork = unitOfWork;
+        _orderRepository = orderRepository;
+        _userRepository = userRepository;
     }
 
     public async Task<GetOrdersResult> Handle(GetOrdersQuery request, CancellationToken cancellationToken)
@@ -23,9 +28,9 @@ public class GetOrdersQueryHandler : IRequestHandler<GetOrdersQuery, GetOrdersRe
             }
         }
 
-        // ===== 2. Bắt đầu query từ database (KHÔNG load hết vào RAM) =====
-        var orders = _unitOfWork.Orders.Query();
-        var users = _unitOfWork.Users.Query();
+        // ===== 2. Query database =====
+        var orders = _orderRepository.Query();
+        var users = _userRepository.Query();
 
         // ===== 3. Lọc theo UserId =====
         if (request.UserId > 0)
@@ -33,20 +38,20 @@ public class GetOrdersQueryHandler : IRequestHandler<GetOrdersQuery, GetOrdersRe
             orders = orders.Where(o => o.CustomerId == request.UserId);
         }
 
-        // ===== 4. Lọc theo thời gian =====
+        // ===== 4. Filter theo thời gian =====
         if (request.StartDate.HasValue)
         {
-            DateTime startDate = request.StartDate.Value;
+            var startDate = request.StartDate.Value;
             orders = orders.Where(o => o.TimeCreate >= startDate);
         }
 
         if (request.EndDate.HasValue)
         {
-            DateTime endDate = request.EndDate.Value.AddDays(1);
+            var endDate = request.EndDate.Value.AddDays(1);
             orders = orders.Where(o => o.TimeCreate < endDate);
         }
 
-        // ===== 5. Lọc theo số điện thoại (chỉ Staff/Admin) =====
+        // ===== 5. Filter theo phone =====
         if (!string.IsNullOrEmpty(request.CustomerPhone) && request.Role != "Customer")
         {
             string phone = request.CustomerPhone;
@@ -56,37 +61,27 @@ public class GetOrdersQueryHandler : IRequestHandler<GetOrdersQuery, GetOrdersRe
                                u.PhoneNumber.Contains(phone)));
         }
 
-        // ===== 6. Sorting (viết dễ hiểu bằng if/else) =====
+        // ===== 6. Sorting =====
         string sortBy = request.SortBy ?? "timecreate";
         sortBy = sortBy.ToLower();
 
         if (sortBy == "price")
         {
-            if (request.IsDescending)
-            {
-                orders = orders.OrderByDescending(o => o.Price);
-            }
-            else
-            {
-                orders = orders.OrderBy(o => o.Price);
-            }
+            orders = request.IsDescending
+                ? orders.OrderByDescending(o => o.Price)
+                : orders.OrderBy(o => o.Price);
         }
         else
         {
-            if (request.IsDescending)
-            {
-                orders = orders.OrderByDescending(o => o.TimeCreate);
-            }
-            else
-            {
-                orders = orders.OrderBy(o => o.TimeCreate);
-            }
+            orders = request.IsDescending
+                ? orders.OrderByDescending(o => o.TimeCreate)
+                : orders.OrderBy(o => o.TimeCreate);
         }
 
-        // ===== 7. Đếm tổng số record =====
+        // ===== 7. Count =====
         var totalRecords = orders.Count();
 
-        // ===== 8. Phân trang =====
+        // ===== 8. Pagination =====
         int pageNumber = request.PageNumber <= 0 ? 1 : request.PageNumber;
         int pageSize = request.PageSize <= 0 ? 10 : request.PageSize;
 
@@ -95,7 +90,7 @@ public class GetOrdersQueryHandler : IRequestHandler<GetOrdersQuery, GetOrdersRe
             .Take(pageSize)
             .ToList();
 
-        // ===== 9. Join user để map DTO (chỉ lấy user cần thiết) =====
+        // ===== 9. Lấy user liên quan =====
         var userIds = pagedOrders
             .Select(o => o.CustomerId)
             .Concat(pagedOrders.Select(o => o.StaffId))
@@ -106,9 +101,9 @@ public class GetOrdersQueryHandler : IRequestHandler<GetOrdersQuery, GetOrdersRe
             .Where(u => userIds.Contains(u.UserId))
             .ToList();
 
-        var relatedUsers = relatedUsersList
-            .ToDictionary(u => u.UserId);
+        var relatedUsers = relatedUsersList.ToDictionary(u => u.UserId);
 
+        // ===== 10. Map DTO =====
         var orderDtos = new List<OrderDto>();
 
         foreach (var o in pagedOrders)
@@ -123,9 +118,9 @@ public class GetOrdersQueryHandler : IRequestHandler<GetOrdersQuery, GetOrdersRe
                 customerPhone = customer.PhoneNumber;
             }
 
-            if (relatedUsers.ContainsKey(o.StaffId))
+            if (relatedUsers.TryGetValue(o.StaffId, out var staff))
             {
-                staffName = relatedUsers[o.StaffId].UserName;
+                staffName = staff.UserName;
             }
 
             var dto = new OrderDto(
@@ -141,7 +136,7 @@ public class GetOrdersQueryHandler : IRequestHandler<GetOrdersQuery, GetOrdersRe
             orderDtos.Add(dto);
         }
 
-        // ===== 10. Tính tổng số trang =====
+        // ===== 11. Pagination metadata =====
         int totalPages = (int)Math.Ceiling((double)totalRecords / pageSize);
 
         var pagination = new PaginationMetadata(
