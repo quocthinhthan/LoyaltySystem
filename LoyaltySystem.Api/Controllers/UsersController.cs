@@ -25,7 +25,10 @@ public class UsersController : ControllerBase
     [HttpGet("staffs")]
     [Authorize(Policy = "AdminOnly")] // Sử dụng Policy AdminOnly từ Program.cs
     public async Task<IActionResult> GetStaffs([FromQuery] GetStaffsQuery query, CancellationToken ct)
-        => Ok(await _mediator.Send(query, ct));
+    {
+        return Ok(await _mediator.Send(query, ct));
+
+    }
 
     /// <summary>
     /// [Admin] Xem chi tiết một nhân viên
@@ -46,7 +49,9 @@ public class UsersController : ControllerBase
     [HttpGet("customers")]
     [Authorize(Policy = "StaffOrAdmin")] // Sử dụng Policy StaffOrAdmin từ Program.cs
     public async Task<IActionResult> GetCustomers([FromQuery] GetCustomersQuery query, CancellationToken ct)
-        => Ok(await _mediator.Send(query, ct));
+    {
+        return Ok(await _mediator.Send(query, ct));
+    }
 
     /// <summary>
     /// [Staff/Admin] Xem chi tiết hồ sơ khách hàng

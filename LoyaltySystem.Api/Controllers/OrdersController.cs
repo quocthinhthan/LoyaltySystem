@@ -26,13 +26,7 @@ public class OrdersController : ControllerBase
     [Authorize(Policy = "StaffOrAdmin")] // Dùng Policy thay vì check thủ công
     public async Task<IActionResult> CreateOrder([FromBody] CreateOrderCommand request)
     {
-        // Không cần lấy staffId ở đây nữa, Handler sẽ tự lấy qua ICurrentUserService
-        var command = new CreateOrderCommand(
-            CustomerPhoneNumber: request.CustomerPhoneNumber,
-            Price: request.Price
-        );
-
-        return Ok(await _mediator.Send(command));
+        return Ok(await _mediator.Send(request));
     }
 
     /// <summary>
