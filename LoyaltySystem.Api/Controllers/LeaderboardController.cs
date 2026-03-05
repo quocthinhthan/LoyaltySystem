@@ -22,13 +22,10 @@ public class LeaderboardController : ControllerBase
     /// <param name="pageNumber">Số trang (mặc định 1)</param>
     /// <param name="pageSize">Số records/trang (mặc định 50)</param>
     [HttpGet]
-    public async Task<IActionResult> GetLeaderboard(
-        [FromQuery] int pageNumber = 1,
-        [FromQuery] int pageSize = 50)
+    public async Task<IActionResult> GetLeaderboard([FromQuery] GetLeaderboardQuery query)
     {
-        var query = new GetLeaderboardQuery(pageNumber, pageSize);
-        var result = await _mediator.Send(query);
-        return Ok(result);
+ 
+        return Ok(await _mediator.Send(query));
     }
 
     /// <summary>
@@ -51,7 +48,6 @@ public class LeaderboardController : ControllerBase
     public async Task<IActionResult> GetMonthlyLeaderboard([FromQuery]GetMonthlyLeaderboardQuery query)
 
     {
-        var result = await _mediator.Send(query);
-        return Ok(result);
+        return Ok(await _mediator.Send(query));
     }
 }
