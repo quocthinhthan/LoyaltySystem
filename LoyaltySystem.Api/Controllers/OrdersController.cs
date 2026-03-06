@@ -32,8 +32,6 @@ public class OrdersController : ControllerBase
     /// <summary>
     /// Lấy danh sách orders với filter và pagination
     /// </summary>
-    /// <param name="userId">ID người dùng hiện tại</param>
-    /// <param name="role">Role: Customer/Staff/Admin</param>
     /// <param name="startDate">Từ ngày (yyyy-MM-dd)</param>
     /// <param name="endDate">Đến ngày (yyyy-MM-dd)</param>
     /// <param name="pageNumber">Số trang (mặc định 1)</param>
